@@ -1,9 +1,10 @@
 import dotenv from 'dotenv';
 import { createServer } from 'node:http'
-import {Server, Socket} from 'socket.io'
+import { Server, Socket } from 'socket.io'
 import { v4 as uuidv4 } from 'uuid';
 
 dotenv.config();
+const PORT = process.env.PORT || 8000
 
 const server = createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -47,6 +48,7 @@ io.on('connection', (socket) => {
 	})
 
 	socket.on("search-game", () => {
+		console.log('player searching')
 		if (!!playerSearching) {
 			let id = uuidv4();
 
@@ -76,7 +78,13 @@ io.on('connection', (socket) => {
 		socket.emit("start", game.player)
 		game.player += 1
 	})
+
+	socket.on("resign", () => {
+		let game = games.get(socket.data.matchId)
+		if (!game) return
+		io.to(`game-${game.id}`).emit("win", socket.data.player == 1 ? 0 : 1)
+	})
 });
 
-console.log('server listening on 8000')
-server.listen(8000);
+console.log(`🚀 Server listening on ${PORT}`)
+server.listen(PORT);
