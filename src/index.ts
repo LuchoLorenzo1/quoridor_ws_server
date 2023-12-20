@@ -2,8 +2,9 @@ import dotenv from "dotenv";
 import { createServer } from "node:http";
 import { Server, Socket } from "socket.io";
 import { v4 as uuidv4 } from "uuid";
-import { isValidMove } from "./utils";
+import { isValidMove } from "./game";
 import { Game } from "./types";
+import { parseCookie } from "./utils";
 
 dotenv.config();
 const PORT = process.env.PORT || 8000;
@@ -17,9 +18,44 @@ const server = createServer((req, res) => {
   );
 });
 
-const io = new Server(server, {
+interface ServerToClientEvents {
+  move: (move: string) => void;
+  start: (player: number) => void;
+  foundGame: (id: string) => void;
+  win: (player: number, reason?: string) => void;
+  game: (history: string[], player: number) => void;
+}
+
+interface ClientToServerEvents {
+  move: (move: string) => void;
+  searchGame: () => void;
+  start: () => void;
+  resign: () => void;
+  getGame: (gameId: string) => void;
+}
+
+interface InterServerEvents {
+  ping: () => void;
+}
+
+interface SocketData {
+  user: {
+	  name: string,
+	  mail: string,
+  };
+  matchId: string;
+  player: number;
+}
+
+const io = new Server<
+  ClientToServerEvents,
+  ServerToClientEvents,
+  InterServerEvents,
+  SocketData
+>(server, {
   cors: {
-    origin: "*",
+    origin: "http://localhost:3000",
+	credentials: true,
   },
 });
 
@@ -27,7 +63,28 @@ let playerSearching: { socket: Socket } | null;
 
 let games: Map<string, Game> = new Map();
 
+
+io.use(async (socket, next) => {
+	if (!socket.handshake.headers["cookie"])
+		return socket.disconnect()
+
+	let cookies = parseCookie(socket.handshake.headers["cookie"])
+	if (!cookies["next-auth.session-token"])
+		return socket.disconnect()
+
+	let res = await fetch(`http://localhost:3000/api/auth/session/${cookies["next-auth.session-token"]}`)
+	if (!res.ok)
+		return socket.disconnect()
+
+	let data = await res.json()
+	socket.data.user = data
+
+	next()
+})
+
 io.on("connection", (socket) => {
+  console.log("connection")
+
   socket.on("move", (move: string) => {
     let game = games.get(socket.data.matchId);
     if (!game) return;
@@ -45,13 +102,12 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("search-game", () => {
-    console.log("player searching");
+  socket.on("searchGame", () => {
     if (!!playerSearching) {
       let id = uuidv4();
 
-      playerSearching.socket.emit("found-game", id);
-      socket.emit("found-game", id);
+      playerSearching.socket.emit("foundGame", id);
+      socket.emit("foundGame", id);
 
       socket.join(`game-${id}`);
       playerSearching.socket.join(`game-${id}`);
@@ -91,7 +147,7 @@ io.on("connection", (socket) => {
     );
   });
 
-  socket.on("get-game", (gameId: string) => {
+  socket.on("getGame", (gameId: string) => {
     let game = games.get(gameId);
     if (!game) return;
   });
