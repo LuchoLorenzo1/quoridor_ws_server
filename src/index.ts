@@ -21,10 +21,10 @@ const server = createServer((req, res) => {
 
 interface ServerToClientEvents {
 	move: (move: string) => void;
-	start: (player: number) => void;
+	start: (history: string[], turn: number, player: number) => void;
 	foundGame: (id: string) => void;
 	win: (player: number, reason?: string) => void;
-	game: (history: string[], player: number) => void;
+	game: (history: string[], turn: number) => void;
 }
 
 interface ClientToServerEvents {
@@ -32,7 +32,6 @@ interface ClientToServerEvents {
 	searchGame: () => void;
 	start: () => void;
 	resign: () => void;
-	getGame: (gameId: string) => void;
 }
 
 interface InterServerEvents {
@@ -45,7 +44,6 @@ interface SocketData {
 		mail: string,
 		id: string,
 	};
-	matchId: string | null;
 }
 
 const io = new Server<
@@ -63,6 +61,7 @@ const io = new Server<
 let playerSearching: { socket: Socket<ClientToServerEvents, ServerToClientEvents, DefaultEventsMap, SocketData> } | null;
 
 let games: Map<string, Game> = new Map();
+let playerToMatch: Map<string, string> = new Map();
 
 io.use(async (socket, next) => {
 	if (!socket.handshake.headers["cookie"])
@@ -86,9 +85,10 @@ io.on("connection", (socket) => {
 	console.log("connection", socket.data.user.id)
 
 	socket.on("move", (move: string) => {
-		if (!socket.data.matchId) return
+		let matchId = playerToMatch.get(socket.data.user.id)
+		if (!matchId) return
 
-		let game = games.get(socket.data.matchId);
+		let game = games.get(matchId);
 		if (!game) return;
 
 		let player = game.players.indexOf(socket.data.user.id)
@@ -97,10 +97,11 @@ io.on("connection", (socket) => {
 		const state = isValidMove(game, move);
 		if (state) {
 			game.history.push(move);
-			socket.broadcast.to(`game-${socket.data.matchId}`).emit("move", move);
+			socket.broadcast.to(`game-${matchId}`).emit("move", move);
 			if (state == "win") {
 				io.to(`game-${game.id}`).emit("win", game.turn);
 				game.winner = game.turn;
+				games.delete(matchId)
 			}
 			game.turn = game.turn + 1 >= game.players.length ? 0 : game.turn + 1;
 		}
@@ -118,6 +119,9 @@ io.on("connection", (socket) => {
 		socket.join(`game-${id}`);
 		playerSearching.socket.join(`game-${id}`);
 
+		playerToMatch.set(socket.data.user.id, id)
+		playerToMatch.set(playerSearching.socket.data.user.id, id)
+
 		let players
 		if (Math.random() < 0.5) {
 			players = [socket.data.user.id, playerSearching.socket.data.user.id]
@@ -128,39 +132,35 @@ io.on("connection", (socket) => {
 		let new_game: Game = { id, history: [], players, turn: 0 };
 		games.set(id, new_game);
 
-		socket.data.matchId = id;
-		playerSearching.socket.data.matchId = id;
-
 		playerSearching = null;
 	});
 
 	socket.on("start", () => {
-		if (!socket.data.matchId) return
+		let matchId = playerToMatch.get(socket.data.user.id)
+		if (!matchId) return
 
-		let game = games.get(socket.data.matchId);
+		let game = games.get(matchId);
 		if (!game) return;
 
 		let i = game.players.indexOf(socket.data.user.id)
 		if (i < 0) return
 
-		socket.emit("start", i);
+		socket.emit("start", game.history, game.turn, i);
+		socket.join(`game-${game.id}`);
+		console.log(socket.rooms)
 	});
 
 	socket.on("resign", () => {
-		if (!socket.data.matchId) return
+		let matchId = playerToMatch.get(socket.data.user.id)
+		if (!matchId) return
 
-		let game = games.get(socket.data.matchId);
+		let game = games.get(matchId);
 		if (!game) return;
 		io.to(`game-${game.id}`).emit(
 			"win",
 			game.players.indexOf(socket.data.user.id),
 			"by resignation",
 		);
-	});
-
-	socket.on("getGame", (gameId: string) => {
-		let game = games.get(gameId);
-		if (!game) return;
 	});
 });
 
