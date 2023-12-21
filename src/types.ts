@@ -1,7 +1,7 @@
 export type Game = {
   id: string;
   history: string[];
-  player: number;
+  players: string[]; // ids of players
   turn: number;
   winner?: number;
 };
