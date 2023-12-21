@@ -3,165 +3,197 @@ import { createServer } from "node:http";
 import { Server, Socket } from "socket.io";
 import { v4 as uuidv4 } from "uuid";
 import { isValidMove } from "./game";
-import { Game } from "./types";
 import { parseCookie } from "./utils";
 import { DefaultEventsMap } from "socket.io/dist/typed-events";
+import redis from "./redisClient";
 
 dotenv.config();
 const PORT = process.env.PORT || 8000;
 
-const server = createServer((req, res) => {
-	res.writeHead(200, { "Content-Type": "application/json" });
-	res.end(
-		JSON.stringify({
-			data: "Hello World!",
-		}),
-	);
+const server = createServer((_, res) => {
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(
+    JSON.stringify({
+      data: "Hello World!",
+    }),
+  );
 });
 
 interface ServerToClientEvents {
-	move: (move: string) => void;
-	start: (history: string[], turn: number, player: number) => void;
-	foundGame: (id: string) => void;
-	win: (player: number, reason?: string) => void;
-	game: (history: string[], turn: number) => void;
+  move: (move: string) => void;
+  start: (history: string[], turn: number, player: number) => void;
+  foundGame: (id: string) => void;
+  win: (player: number, reason?: string) => void;
+  game: (history: string[], turn: number) => void;
 }
 
 interface ClientToServerEvents {
-	move: (move: string) => void;
-	searchGame: () => void;
-	start: () => void;
-	resign: () => void;
+  move: (move: string) => void;
+  searchGame: () => void;
+  start: () => void;
+  resign: () => void;
 }
 
 interface InterServerEvents {
-	ping: () => void;
+  ping: () => void;
 }
 
 interface SocketData {
-	user: {
-		name: string,
-		mail: string,
-		id: string,
-	};
+  user: {
+    name: string;
+    mail: string;
+    id: string;
+  };
 }
 
 const io = new Server<
-	ClientToServerEvents,
-	ServerToClientEvents,
-	InterServerEvents,
-	SocketData
+  ClientToServerEvents,
+  ServerToClientEvents,
+  InterServerEvents,
+  SocketData
 >(server, {
-	cors: {
-		origin: "http://localhost:3000",
-		credentials: true,
-	},
+  cors: {
+    origin: "http://localhost:3000",
+    credentials: true,
+  },
 });
 
-let playerSearching: { socket: Socket<ClientToServerEvents, ServerToClientEvents, DefaultEventsMap, SocketData> } | null;
-
-let games: Map<string, Game> = new Map();
-let playerToMatch: Map<string, string> = new Map();
+let playerSearching: {
+  socket: Socket<
+    ClientToServerEvents,
+    ServerToClientEvents,
+    DefaultEventsMap,
+    SocketData
+  >;
+} | null;
 
 io.use(async (socket, next) => {
-	if (!socket.handshake.headers["cookie"])
-		return socket.disconnect()
+  if (!socket.handshake.headers["cookie"]) return socket.disconnect();
 
-	let cookies = parseCookie(socket.handshake.headers["cookie"])
-	if (!cookies["next-auth.session-token"])
-		return socket.disconnect()
+  let cookies = parseCookie(socket.handshake.headers["cookie"]);
+  if (!cookies["next-auth.session-token"]) return socket.disconnect();
 
-	let res = await fetch(`http://localhost:3000/api/auth/session/${cookies["next-auth.session-token"]}`)
-	if (!res.ok)
-		return socket.disconnect()
+  let res = await fetch(
+    `http://localhost:3000/api/auth/session/${cookies["next-auth.session-token"]}`,
+  );
+  if (!res.ok) return socket.disconnect();
 
-	let data = await res.json()
-	socket.data.user = data
+  let data = await res.json();
+  socket.data.user = data;
 
-	next()
-})
+  next();
+});
 
 io.on("connection", (socket) => {
-	console.log("connection", socket.data.user.id)
+  console.log("connection", socket.data.user.id);
 
-	socket.on("move", (move: string) => {
-		let matchId = playerToMatch.get(socket.data.user.id)
-		if (!matchId) return
+  const deleteGame = async (gameId: string, players: string[]) => {
+    return await redis
+      .multi()
+      .del(`game:playerId:${players[0]}`)
+      .del(`game:playerId:${players[1]}`)
+      .del(`game:history:${gameId}`)
+      .del(`game:players:${gameId}`)
+      .del(`game:turn:${gameId}`)
+      .exec();
+  };
 
-		let game = games.get(matchId);
-		if (!game) return;
+  socket.on("move", async (move: string) => {
+    const gameId = await redis.get(`game:playerId:${socket.data.user.id}`);
+    if (!gameId) return;
 
-		let player = game.players.indexOf(socket.data.user.id)
-		if (player != game.turn) return;
+    let [players, history, turn] = (await redis
+      .multi()
+      .lRange(`game:players:${gameId}`, 0, -1)
+      .lRange(`game:history:${gameId}`, 0, -1)
+      .get(`game:turn:${gameId}`)
+      .exec()) as [string[], string[], string];
 
-		const state = isValidMove(game, move);
-		if (state) {
-			game.history.push(move);
-			socket.broadcast.to(`game-${matchId}`).emit("move", move);
-			if (state == "win") {
-				io.to(`game-${game.id}`).emit("win", game.turn);
-				game.winner = game.turn;
-				games.delete(matchId)
-			}
-			game.turn = game.turn + 1 >= game.players.length ? 0 : game.turn + 1;
-		}
-	});
+    if (!players || turn == null) return null;
 
-	socket.on("searchGame", () => {
-		if (!playerSearching)
-			return playerSearching = { socket };
+    let i = players.indexOf(socket.data.user.id);
+    if (i < 0 || i != +turn) return;
 
-		let id = uuidv4();
+    const state = isValidMove(history, move);
+    if (state) {
+      await redis.rPush(`game:history:${gameId}`, move);
+      socket.broadcast.to(`game-${gameId}`).emit("move", move);
+      if (state == "win") {
+        io.to(`game-${gameId}`).emit("win", +turn);
+        await deleteGame(gameId, players);
+      }
+      await redis.set(
+        `game:turn:${gameId}`,
+        +turn + 1 >= players.length ? 0 : +turn + 1,
+      );
+    }
+  });
 
-		playerSearching.socket.emit("foundGame", id);
-		socket.emit("foundGame", id);
+  socket.on("searchGame", async () => {
+    if (!playerSearching) return (playerSearching = { socket });
 
-		socket.join(`game-${id}`);
-		playerSearching.socket.join(`game-${id}`);
+    let gameId = uuidv4();
 
-		playerToMatch.set(socket.data.user.id, id)
-		playerToMatch.set(playerSearching.socket.data.user.id, id)
+    playerSearching.socket.emit("foundGame", gameId);
+    socket.emit("foundGame", gameId);
 
-		let players
-		if (Math.random() < 0.5) {
-			players = [socket.data.user.id, playerSearching.socket.data.user.id]
-		} else {
-			players = [playerSearching.socket.data.user.id, socket.data.user.id]
-		}
+    socket.join(`game-${gameId}`);
+    playerSearching.socket.join(`game-${gameId}`);
 
-		let new_game: Game = { id, history: [], players, turn: 0 };
-		games.set(id, new_game);
+    let players;
+    if (Math.random() < 0.5) {
+      players = [socket.data.user.id, playerSearching.socket.data.user.id];
+    } else {
+      players = [playerSearching.socket.data.user.id, socket.data.user.id];
+    }
 
-		playerSearching = null;
-	});
+    await redis
+      .multi()
+      .set(`game:playerId:${socket.data.user.id}`, gameId, { EX: 60 * 5 }) // 5 minutos expire
+      .set(`game:playerId:${playerSearching.socket.data.user.id}`, gameId, {
+        EX: 60 * 5,
+      })
+      .lPush(`game:players:${gameId}`, players)
+      .set(`game:turn:${gameId}`, 0)
+      .exec();
 
-	socket.on("start", () => {
-		let matchId = playerToMatch.get(socket.data.user.id)
-		if (!matchId) return
+    playerSearching = null;
+  });
 
-		let game = games.get(matchId);
-		if (!game) return;
+  socket.on("start", async () => {
+    const gameId = await redis.get(`game:playerId:${socket.data.user.id}`);
 
-		let i = game.players.indexOf(socket.data.user.id)
-		if (i < 0) return
+    let players = await redis.lRange(`game:players:${gameId}`, 0, -1);
+    if (!players) return null;
 
-		socket.emit("start", game.history, game.turn, i);
-		socket.join(`game-${game.id}`);
-		console.log(socket.rooms)
-	});
+    let i = players.indexOf(socket.data.user.id);
+    if (i < 0) return;
 
-	socket.on("resign", () => {
-		let matchId = playerToMatch.get(socket.data.user.id)
-		if (!matchId) return
+    let history = await redis.lRange(`game:history:${gameId}`, 0, -1);
+    let turn = await redis.get(`game:turn:${gameId}`);
+    if (turn == null) return null;
 
-		let game = games.get(matchId);
-		if (!game) return;
-		io.to(`game-${game.id}`).emit(
-			"win",
-			game.players.indexOf(socket.data.user.id),
-			"by resignation",
-		);
-	});
+    socket.emit("start", history, +turn, i);
+    socket.join(`game-${gameId}`);
+  });
+
+  socket.on("resign", async () => {
+    const gameId = await redis.get(`game:playerId:${socket.data.user.id}`);
+    if (!gameId) return;
+
+    let players = await redis.lRange(`game:players:${gameId}`, 0, -1);
+    if (!players) return null;
+    let i = players.indexOf(socket.data.user.id);
+    if (i < 0) return;
+
+    await deleteGame(gameId, players);
+
+    io.to(`game-${gameId}`).emit(
+      "win",
+      players.indexOf(socket.data.user.id),
+      "by resignation",
+    );
+  });
 });
 
 console.log(`🚀 Server listening on ${PORT}`);

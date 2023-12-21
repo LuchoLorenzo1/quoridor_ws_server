@@ -1,4 +1,4 @@
-import { Game, PawnPos, Wall } from "./types";
+import { PawnPos, Wall } from "./types";
 
 const matrix = (m: number, n: number): Wall[][] => {
   let _matrix: Wall[][] = [];
@@ -163,12 +163,15 @@ export const pickHorizontalWall = (
 export const WHITE_START = { x: 0, y: 4 };
 export const BLACK_START = { x: 8, y: 4 };
 
-export const isValidMove = (game: Game, move: string): boolean | "win" => {
+export const isValidMove = (
+  history: string[],
+  move: string,
+): boolean | "win" => {
   let board = matrix(9, 9);
   let blackPos: PawnPos = BLACK_START;
   let whitePos: PawnPos = WHITE_START;
 
-  game.history.forEach((move, i) => {
+  history.forEach((move, i) => {
     let { pos, wall } = stringToMove(move);
     if (wall) {
       if (wall.col == 1) {
@@ -208,14 +211,14 @@ export const isValidMove = (game: Game, move: string): boolean | "win" => {
     return whiteCanFinish && blackCanFinish;
   }
 
-  let possibleMoves: PawnPos[] = [];
-  if (game.history.length % 2 == 0) {
+  let possibleMoves: PawnPos[];
+  if (history.length % 2 == 0) {
     possibleMoves = getPossibleMoves(whitePos, blackPos, board);
   } else {
     possibleMoves = getPossibleMoves(blackPos, whitePos, board);
   }
 
-  let end = game.history.length % 2 == 0 ? 8 : 0;
+  let end = history.length % 2 == 0 ? 8 : 0;
 
   let b = false;
   let isWinning = false;
