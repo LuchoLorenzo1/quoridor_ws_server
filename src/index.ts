@@ -23,12 +23,14 @@ interface ServerToClientEvents {
   move: (move: string) => void;
   start: (history: string[], turn: number, player: number) => void;
   foundGame: (id: string) => void;
+  reconnectGame: (id: string) => void;
   win: (player: number, reason?: string) => void;
   game: (history: string[], turn: number) => void;
 }
 
 interface ClientToServerEvents {
   move: (move: string) => void;
+  reconnectGame: () => void;
   searchGame: () => void;
   start: () => void;
   resign: () => void;
@@ -101,8 +103,20 @@ io.use(async (socket, next) => {
   next();
 });
 
-io.on("connection", (socket) => {
-  console.log("connection");
+io.on("connection", async (socket) => {
+  socket.onAnyOutgoing((event) => {
+	  console.log("sending event: ", event);
+  })
+  socket.onAny((event) => {
+	  console.log("receiving event: ", event);
+  })
+
+  socket.on("reconnectGame", async () => {
+	  const gameId = await redis.get(`game:playerId:${socket.data.user.id}`);
+	  if (gameId) {
+		  socket.emit("reconnectGame", gameId)
+	  }
+  })
 
   socket.on("searchGame", async () => {
     if (!playerSearching) return (playerSearching = { socket });
