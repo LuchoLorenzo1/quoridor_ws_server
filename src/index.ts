@@ -67,6 +67,23 @@ let playerSearching: {
   >;
 } | null;
 
+io.of('/game').use(async (socket, next) => {
+  if (!socket.handshake.headers["cookie"]) return socket.disconnect();
+
+  let cookies = parseCookie(socket.handshake.headers["cookie"]);
+  if (!cookies["next-auth.session-token"]) return socket.disconnect();
+
+  let res = await fetch(
+    `http://localhost:3000/api/auth/session/${cookies["next-auth.session-token"]}`,
+  );
+  if (!res.ok) return socket.disconnect();
+
+  let data = await res.json();
+  socket.data.user = data;
+
+  next();
+});
+
 io.use(async (socket, next) => {
   if (!socket.handshake.headers["cookie"]) return socket.disconnect();
 
@@ -85,7 +102,49 @@ io.use(async (socket, next) => {
 });
 
 io.on("connection", (socket) => {
-  console.log("connection", socket.data.user.id);
+  console.log("connection");
+
+  socket.on("searchGame", async () => {
+    if (!playerSearching) return (playerSearching = { socket });
+
+    let gameId = uuidv4();
+
+    playerSearching.socket.emit("foundGame", gameId);
+    socket.emit("foundGame", gameId);
+
+    socket.join(`game-${gameId}`);
+    playerSearching.socket.join(`game-${gameId}`);
+
+    let players;
+    if (Math.random() < 0.5) {
+      players = [socket.data.user.id, playerSearching.socket.data.user.id];
+    } else {
+      players = [playerSearching.socket.data.user.id, socket.data.user.id];
+    }
+
+    await redis
+      .multi()
+      .set(`game:playerId:${socket.data.user.id}`, gameId, { EX: 60 * 30 }) // 30 minutos expire
+      .set(`game:playerId:${playerSearching.socket.data.user.id}`, gameId, {
+        EX: 60 * 30,
+      })
+      .lPush(`game:players:${gameId}`, players)
+      .set(`game:turn:${gameId}`, 0)
+      .exec();
+
+    playerSearching = null;
+  });
+})
+
+io.of('/game').on("connection", (socket) => {
+  console.log("game connection", socket.data.user.id);
+
+  socket.onAnyOutgoing((event) => {
+	  console.log("sending game event: ", event);
+  })
+  socket.onAny((event) => {
+	  console.log("receiving game event: ", event);
+  })
 
   const deleteGame = async (gameId: string, players: string[]) => {
     return await redis
@@ -115,49 +174,21 @@ io.on("connection", (socket) => {
     if (i < 0 || i != +turn) return;
 
     const state = isValidMove(history, move);
+
     if (state) {
       await redis.rPush(`game:history:${gameId}`, move);
       socket.broadcast.to(`game-${gameId}`).emit("move", move);
       if (state == "win") {
-        io.to(`game-${gameId}`).emit("win", +turn);
+        socket.to(`game-${gameId}`).emit("win", +turn);
         await deleteGame(gameId, players);
+		return
       }
+
       await redis.set(
         `game:turn:${gameId}`,
         +turn + 1 >= players.length ? 0 : +turn + 1,
       );
     }
-  });
-
-  socket.on("searchGame", async () => {
-    if (!playerSearching) return (playerSearching = { socket });
-
-    let gameId = uuidv4();
-
-    playerSearching.socket.emit("foundGame", gameId);
-    socket.emit("foundGame", gameId);
-
-    socket.join(`game-${gameId}`);
-    playerSearching.socket.join(`game-${gameId}`);
-
-    let players;
-    if (Math.random() < 0.5) {
-      players = [socket.data.user.id, playerSearching.socket.data.user.id];
-    } else {
-      players = [playerSearching.socket.data.user.id, socket.data.user.id];
-    }
-
-    await redis
-      .multi()
-      .set(`game:playerId:${socket.data.user.id}`, gameId, { EX: 60 * 5 }) // 5 minutos expire
-      .set(`game:playerId:${playerSearching.socket.data.user.id}`, gameId, {
-        EX: 60 * 5,
-      })
-      .lPush(`game:players:${gameId}`, players)
-      .set(`game:turn:${gameId}`, 0)
-      .exec();
-
-    playerSearching = null;
   });
 
   socket.on("start", async () => {
@@ -187,13 +218,16 @@ io.on("connection", (socket) => {
     if (i < 0) return;
 
     await deleteGame(gameId, players);
-
-    io.to(`game-${gameId}`).emit(
+    io.of("/game").to(`game-${gameId}`).emit(
       "win",
       players.indexOf(socket.data.user.id),
       "by resignation",
     );
   });
+
+  socket.on("disconnect", () => {
+	  console.log("desconectado")
+  })
 });
 
 console.log(`🚀 Server listening on ${PORT}`);
