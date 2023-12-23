@@ -193,7 +193,7 @@ io.of('/game').on("connection", (socket) => {
       await redis.rPush(`game:history:${gameId}`, move);
       socket.broadcast.to(`game-${gameId}`).emit("move", move);
       if (state == "win") {
-        socket.to(`game-${gameId}`).emit("win", +turn);
+        io.of("/game").to(`game-${gameId}`).emit("win", +turn);
         await deleteGame(gameId, players);
 		return
       }
