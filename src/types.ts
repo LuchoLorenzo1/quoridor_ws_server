@@ -13,6 +13,7 @@ export interface ServerToClientEvents {
 	foundGame: (id: string) => void;
 	reconnectGame: (id: string) => void;
 	win: (player: number, reason?: string) => void;
+	abortGame: () => void;
 }
 
 export interface ClientToServerEvents {

@@ -4,13 +4,20 @@ import { Server } from "socket.io";
 import { v4 as uuidv4 } from "uuid";
 import { isValidMove } from "./game";
 import redis from "./redisClient";
-import { ClientToServerEvents, InterServerEvents, ServerToClientEvents, SocketData, TSocket } from "./types";
+import {
+	ClientToServerEvents,
+	InterServerEvents,
+	ServerToClientEvents,
+	SocketData,
+	TSocket,
+} from "./types";
 import { authMiddleware } from "./middleware";
 
 dotenv.config();
 const PORT = process.env.PORT || 8000;
 
-const SECONDS = 10;
+const SECONDS = 50;
+const ABORT_SECONDS = 10;
 
 const server = createServer((_, res) => {
 	res.writeHead(200, { "Content-Type": "application/json" });
@@ -33,8 +40,7 @@ const io = new Server<
 	},
 });
 
-let playerSearching: { socket: TSocket;
-} | null;
+let playerSearching: { socket: TSocket } | null;
 
 io.of("/game").use(authMiddleware);
 io.use(authMiddleware);
@@ -119,88 +125,84 @@ io.of("/game").on("connection", async (socket) => {
 		if (i < 0 || i != +turn) return;
 
 		const state = isValidMove(history, move);
+		if (!state) return;
 
-		if (state) {
-			await redis.rPush(`game:history:${gameId}`, move);
-			if (state == "win") {
-				io.of("/game").to(`game-${gameId}`).emit("win", +turn);
-				await deleteGame(gameId, players);
-				return;
-			}
+		await redis
+			.multi()
+			.rPush(`game:history:${gameId}`, move)
+			.set(`game:turn:${gameId}`, +turn + 1 >= players.length ? 0 : +turn + 1)
+			.exec();
 
-			const blackLastMove = await redis.get(`game:black_last_move:${gameId}`);
-			const whiteLastMove = await redis.get(`game:white_last_move:${gameId}`);
-			const whiteTimeLeft = await redis.get(`game:white_time_left:${gameId}`);
-			const blackTimeLeft = await redis.get(`game:black_time_left:${gameId}`);
-			if (!whiteTimeLeft || !blackLastMove || !blackTimeLeft || !whiteLastMove) {
-				console.log("what son null");
-				return;
-			}
+		if (state == "win") {
+			io.of("/game").to(`game-${gameId}`).emit("win", +turn);
+			await deleteGame(gameId, players);
+			return;
+		}
 
-			let clear = TimeoutsMap.get(gameId);
-			clearTimeout(clear);
-			let timeLeft: number = 0;
+		let blackLastMove: string | null | number = await redis.get(
+			`game:black_last_move:${gameId}`,
+		);
+		let whiteLastMove: string | null | number = await redis.get(
+			`game:white_last_move:${gameId}`,
+		);
+		const whiteTimeLeft = await redis.get(`game:white_time_left:${gameId}`);
+		const blackTimeLeft = await redis.get(`game:black_time_left:${gameId}`);
+		if (!whiteTimeLeft || !blackTimeLeft) return;
 
-			if (+turn == 0) {
-				let t = setTimeout(async () => {
+		const clear = TimeoutsMap.get(gameId);
+		clearTimeout(clear);
+		let timeLeft: number = 0;
+		const now = new Date().getTime();
+
+		if (!whiteLastMove) whiteLastMove = now;
+		if (!blackLastMove) blackLastMove = now;
+
+		if (+turn == 0) {
+			let t;
+			if (!blackLastMove) {
+				t = setTimeout(async () => {
+					let s = await redis.get(`game:black_last_move:${gameId}`);
+					if (s == null) {
+						await deleteGame(gameId, players);
+						io.of("/game").to(`game-${gameId}`).emit("abortGame");
+					}
+				}, ABORT_SECONDS * 1000);
+			} else {
+				t = setTimeout(async () => {
 					let s = await redis.get(`game:black_time_left:${gameId}`);
 					if (s == null || +s == +blackTimeLeft) {
 						io.of("/game").to(`game-${gameId}`).emit("win", 0, "by timeout");
 						await deleteGame(gameId, players);
 					}
 				}, +blackTimeLeft * 1000);
-				TimeoutsMap.set(gameId, t);
-				console.log("seteando para que gane blanco timeout: ", +blackTimeLeft * 1000)
-
-				let now = (new Date()).getTime()
-				let diff = now - +blackLastMove;
-
-				await redis.set(
-					`game:white_last_move:${gameId}`,
-					now,
-				);
-
-				timeLeft = +whiteTimeLeft - (diff/1000)
-				console.log("Nuevo tiempo del blanco", timeLeft)
-				await redis.set(
-					`game:white_time_left:${gameId}`,
-					timeLeft,
-				);
-			} else {
-				let t = setTimeout(async () => {
-					let s = await redis.get(`game:white_time_left:${gameId}`);
-					if (s == null || +s == +whiteTimeLeft) {
-						io.of("/game").to(`game-${gameId}`).emit("win", 1, "by timeout");
-						await deleteGame(gameId, players);
-					}
-				}, +whiteTimeLeft * 1000);
-				TimeoutsMap.set(gameId, t);
-				console.log("seteando timeout para que gane el negro: ", +whiteTimeLeft * 1000)
-
-				let now = (new Date()).getTime()
-				let diff = now - +whiteLastMove;
-				timeLeft = +blackTimeLeft - (diff/1000)
-
-				await redis.set(
-					`game:black_time_left:${gameId}`,
-					timeLeft,
-				);
-				console.log("Nuevo tiempo del negro", timeLeft)
-
-				await redis.set(
-					`game:black_last_move:${gameId}`,
-					now,
-				);
 			}
+			TimeoutsMap.set(gameId, t);
 
-			await redis.set(
-				`game:turn:${gameId}`,
-				+turn + 1 >= players.length ? 0 : +turn + 1,
-			);
+			let diff = now - +blackLastMove;
+			timeLeft = +whiteTimeLeft - diff / 1000;
 
-			callback(timeLeft)
-			socket.broadcast.to(`game-${gameId}`).emit("move", move, timeLeft);
+			await redis.set(`game:white_last_move:${gameId}`, now);
+			await redis.set(`game:white_time_left:${gameId}`, timeLeft);
+		} else {
+			let t = setTimeout(async () => {
+				let s = await redis.get(`game:white_time_left:${gameId}`);
+				if (s == null || +s == +whiteTimeLeft) {
+					io.of("/game").to(`game-${gameId}`).emit("win", 1, "by timeout");
+					await deleteGame(gameId, players);
+				}
+			}, +whiteTimeLeft * 1000);
+			TimeoutsMap.set(gameId, t);
+
+			if (!whiteLastMove) whiteLastMove = now;
+			let diff = now - +whiteLastMove;
+			timeLeft = +blackTimeLeft - diff / 1000;
+
+			await redis.set(`game:black_time_left:${gameId}`, timeLeft);
+			await redis.set(`game:black_last_move:${gameId}`, now);
 		}
+
+		callback(timeLeft);
+		socket.broadcast.to(`game-${gameId}`).emit("move", move, timeLeft);
 	});
 
 	socket.on("ready", async () => {
@@ -224,27 +226,22 @@ io.of("/game").on("connection", async (socket) => {
 		if (!ready || +ready == 0) {
 			await redis.set(`game:playersReady:${gameId}`, 1);
 		} else if (+ready == 1) {
-
 			await redis.set(`game:playersReady:${gameId}`, 2);
-			await redis.multi()
+			await redis
+				.multi()
 				.set(`game:black_time_left:${gameId}`, SECONDS)
 				.set(`game:white_time_left:${gameId}`, SECONDS)
-				.set(`game:black_last_move:${gameId}`, new Date().getTime())
-				.set(`game:white_last_move:${gameId}`, new Date().getTime())
-			.exec()
+				.exec();
 
 			io.of("/game").to(`game-${gameId}`).emit("start");
 
 			let t = setTimeout(async () => {
-				let s = await redis.get(`game:white_time_left:${gameId}`);
-				if (s == null || +s == SECONDS) {
-					io.of("/game").to(`game-${gameId}`).emit("win", 1, "by timeout");
-					await deleteGame(gameId, players)
+				let s = await redis.get(`game:white_last_move:${gameId}`);
+				if (s == null) {
+					await deleteGame(gameId, players);
+					io.of("/game").to(`game-${gameId}`).emit("abortGame");
 				}
-			}, SECONDS * 1000);
-
-			console.log("setting first timeout para el blanco: ", SECONDS * 1000)
-
+			}, ABORT_SECONDS * 1000);
 			TimeoutsMap.set(gameId, t);
 		}
 	});
