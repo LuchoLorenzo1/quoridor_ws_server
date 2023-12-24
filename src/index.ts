@@ -1,16 +1,16 @@
 import dotenv from "dotenv";
 import { createServer } from "node:http";
-import { Server, Socket } from "socket.io";
+import { Server } from "socket.io";
 import { v4 as uuidv4 } from "uuid";
 import { isValidMove } from "./game";
-import { parseCookie } from "./utils";
-import { DefaultEventsMap } from "socket.io/dist/typed-events";
 import redis from "./redisClient";
+import { ClientToServerEvents, InterServerEvents, ServerToClientEvents, SocketData, TSocket } from "./types";
+import { authMiddleware } from "./middleware";
 
 dotenv.config();
 const PORT = process.env.PORT || 8000;
 
-const SECONDS = 60;
+const SECONDS = 10;
 
 const server = createServer((_, res) => {
 	res.writeHead(200, { "Content-Type": "application/json" });
@@ -20,40 +20,6 @@ const server = createServer((_, res) => {
 		}),
 	);
 });
-
-interface ServerToClientEvents {
-	move: (move: string) => void;
-	gameState: (
-		history: string[],
-		turn: number,
-		player: number,
-		seconds: number,
-	) => void;
-	start: () => void;
-	foundGame: (id: string) => void;
-	reconnectGame: (id: string) => void;
-	win: (player: number, reason?: string) => void;
-}
-
-interface ClientToServerEvents {
-	move: (move: string) => void;
-	reconnectGame: () => void;
-	searchGame: () => void;
-	ready: () => void;
-	resign: () => void;
-}
-
-interface InterServerEvents {
-	ping: () => void;
-}
-
-interface SocketData {
-	user: {
-		name: string;
-		mail: string;
-		id: string;
-	};
-}
 
 const io = new Server<
 	ClientToServerEvents,
@@ -67,48 +33,11 @@ const io = new Server<
 	},
 });
 
-let playerSearching: {
-	socket: Socket<
-		ClientToServerEvents,
-		ServerToClientEvents,
-		DefaultEventsMap,
-		SocketData
-	>;
+let playerSearching: { socket: TSocket;
 } | null;
 
-io.of("/game").use(async (socket, next) => {
-	if (!socket.handshake.headers["cookie"]) return socket.disconnect();
-
-	let cookies = parseCookie(socket.handshake.headers["cookie"]);
-	if (!cookies["next-auth.session-token"]) return socket.disconnect();
-
-	let res = await fetch(
-		`http://localhost:3000/api/auth/session/${cookies["next-auth.session-token"]}`,
-	);
-	if (!res.ok) return socket.disconnect();
-
-	let data = await res.json();
-	socket.data.user = data;
-
-	next();
-});
-
-io.use(async (socket, next) => {
-	if (!socket.handshake.headers["cookie"]) return socket.disconnect();
-
-	let cookies = parseCookie(socket.handshake.headers["cookie"]);
-	if (!cookies["next-auth.session-token"]) return socket.disconnect();
-
-	let res = await fetch(
-		`http://localhost:3000/api/auth/session/${cookies["next-auth.session-token"]}`,
-	);
-	if (!res.ok) return socket.disconnect();
-
-	let data = await res.json();
-	socket.data.user = data;
-
-	next();
-});
+io.of("/game").use(authMiddleware);
+io.use(authMiddleware);
 
 io.on("connection", async (socket) => {
 	socket.onAnyOutgoing((event) => {
@@ -173,7 +102,7 @@ io.of("/game").on("connection", async (socket) => {
 			.exec();
 	};
 
-	socket.on("move", async (move: string) => {
+	socket.on("move", async (move: string, callback: any) => {
 		const gameId = await redis.get(`game:playerId:${socket.data.user.id}`);
 		if (!gameId) return;
 
@@ -210,6 +139,7 @@ io.of("/game").on("connection", async (socket) => {
 
 			let clear = TimeoutsMap.get(gameId);
 			clearTimeout(clear);
+			let timeLeft: number = 0;
 
 			if (+turn == 0) {
 				let t = setTimeout(async () => {
@@ -230,10 +160,11 @@ io.of("/game").on("connection", async (socket) => {
 					now,
 				);
 
-				console.log("Nuevo tiempo del blanco", +whiteTimeLeft - (diff/1000))
+				timeLeft = +whiteTimeLeft - (diff/1000)
+				console.log("Nuevo tiempo del blanco", timeLeft)
 				await redis.set(
 					`game:white_time_left:${gameId}`,
-					+whiteTimeLeft - (diff/1000),
+					timeLeft,
 				);
 			} else {
 				let t = setTimeout(async () => {
@@ -248,13 +179,13 @@ io.of("/game").on("connection", async (socket) => {
 
 				let now = (new Date()).getTime()
 				let diff = now - +whiteLastMove;
+				timeLeft = +blackTimeLeft - (diff/1000)
 
 				await redis.set(
 					`game:black_time_left:${gameId}`,
-					+blackTimeLeft - (diff/1000),
+					timeLeft,
 				);
-
-				console.log("Nuevo tiempo del negro", +blackTimeLeft - (diff/1000))
+				console.log("Nuevo tiempo del negro", timeLeft)
 
 				await redis.set(
 					`game:black_last_move:${gameId}`,
@@ -267,7 +198,8 @@ io.of("/game").on("connection", async (socket) => {
 				+turn + 1 >= players.length ? 0 : +turn + 1,
 			);
 
-			socket.broadcast.to(`game-${gameId}`).emit("move", move);
+			callback(timeLeft)
+			socket.broadcast.to(`game-${gameId}`).emit("move", move, timeLeft);
 		}
 	});
 
@@ -292,12 +224,16 @@ io.of("/game").on("connection", async (socket) => {
 		if (!ready || +ready == 0) {
 			await redis.set(`game:playersReady:${gameId}`, 1);
 		} else if (+ready == 1) {
-			await redis.set(`game:playersReady:${gameId}`, 2);
 
-			await redis.set(`game:black_time_left:${gameId}`, SECONDS);
-			await redis.set(`game:white_time_left:${gameId}`, SECONDS);
-			await redis.set(`game:black_last_move:${gameId}`, new Date().getTime());
-			await redis.set(`game:white_last_move:${gameId}`, new Date().getTime());
+			await redis.set(`game:playersReady:${gameId}`, 2);
+			await redis.multi()
+				.set(`game:black_time_left:${gameId}`, SECONDS)
+				.set(`game:white_time_left:${gameId}`, SECONDS)
+				.set(`game:black_last_move:${gameId}`, new Date().getTime())
+				.set(`game:white_last_move:${gameId}`, new Date().getTime())
+			.exec()
+
+			io.of("/game").to(`game-${gameId}`).emit("start");
 
 			let t = setTimeout(async () => {
 				let s = await redis.get(`game:white_time_left:${gameId}`);
@@ -310,7 +246,6 @@ io.of("/game").on("connection", async (socket) => {
 			console.log("setting first timeout para el blanco: ", SECONDS * 1000)
 
 			TimeoutsMap.set(gameId, t);
-			io.of("/game").to(`game-${gameId}`).emit("start");
 		}
 	});
 
