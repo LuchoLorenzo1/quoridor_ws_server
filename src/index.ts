@@ -17,7 +17,7 @@ dotenv.config();
 const PORT = process.env.PORT || 8000;
 
 const SECONDS = 50;
-const ABORT_SECONDS = 10;
+const ABORT_SECONDS = 11;
 
 const server = createServer((_, res) => {
 	res.writeHead(200, { "Content-Type": "application/json" });
@@ -155,15 +155,17 @@ io.of("/game").on("connection", async (socket) => {
 		const now = new Date().getTime();
 
 		if (!whiteLastMove) whiteLastMove = now;
-		if (!blackLastMove) blackLastMove = now;
 
 		if (+turn == 0) {
 			let t;
 			if (!blackLastMove) {
+				console.log("creating timeout for black aborting")
 				t = setTimeout(async () => {
 					let s = await redis.get(`game:black_last_move:${gameId}`);
+						console.log("trying to abort black? ", s)
 					if (s == null) {
 						await deleteGame(gameId, players);
+						console.log("ABORTING GAME")
 						io.of("/game").to(`game-${gameId}`).emit("abortGame");
 					}
 				}, ABORT_SECONDS * 1000);
@@ -178,6 +180,7 @@ io.of("/game").on("connection", async (socket) => {
 			}
 			TimeoutsMap.set(gameId, t);
 
+			if (!blackLastMove) blackLastMove = now;
 			let diff = now - +blackLastMove;
 			timeLeft = +whiteTimeLeft - diff / 1000;
 
@@ -239,6 +242,7 @@ io.of("/game").on("connection", async (socket) => {
 				let s = await redis.get(`game:white_last_move:${gameId}`);
 				if (s == null) {
 					await deleteGame(gameId, players);
+					console.log("ABORTING GAME")
 					io.of("/game").to(`game-${gameId}`).emit("abortGame");
 				}
 			}, ABORT_SECONDS * 1000);
