@@ -7,7 +7,8 @@ export interface ServerToClientEvents {
 		history: string[],
 		turn: number,
 		player: number,
-		seconds: number,
+		whiteSecondsLeft: number,
+		blackSecondsLeft: number,
 	) => void;
 	start: () => void;
 	foundGame: (id: string) => void;

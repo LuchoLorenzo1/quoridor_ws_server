@@ -162,7 +162,6 @@ io.of("/game").on("connection", async (socket) => {
 				console.log("creating timeout for black aborting")
 				t = setTimeout(async () => {
 					let s = await redis.get(`game:black_last_move:${gameId}`);
-						console.log("trying to abort black? ", s)
 					if (s == null) {
 						await deleteGame(gameId, players);
 						console.log("ABORTING GAME")
@@ -173,7 +172,7 @@ io.of("/game").on("connection", async (socket) => {
 				t = setTimeout(async () => {
 					let s = await redis.get(`game:black_time_left:${gameId}`);
 					if (s == null || +s == +blackTimeLeft) {
-						io.of("/game").to(`game-${gameId}`).emit("win", 0, "by timeout");
+						io.of("/game").to(`game-${gameId}`).emit("win", 0, "on time");
 						await deleteGame(gameId, players);
 					}
 				}, +blackTimeLeft * 1000);
@@ -223,17 +222,21 @@ io.of("/game").on("connection", async (socket) => {
 		let turn = await redis.get(`game:turn:${gameId}`);
 		if (turn == null) return null;
 
-		socket.emit("gameState", history, +turn, i, SECONDS);
 		socket.join(`game-${gameId}`);
 
-		if (!ready || +ready == 0) {
-			await redis.set(`game:playersReady:${gameId}`, 1);
-		} else if (+ready == 1) {
+		if (!ready || +ready <= 1) {
+			socket.emit("gameState", history, -1, i, SECONDS, SECONDS);
+			if (!ready || +ready == 0) {
+				await redis.set(`game:playersReady:${gameId}`, 1);
+				return
+			}
+
 			await redis.set(`game:playersReady:${gameId}`, 2);
 			await redis
 				.multi()
 				.set(`game:black_time_left:${gameId}`, SECONDS)
 				.set(`game:white_time_left:${gameId}`, SECONDS)
+				.set(`game:game_started_date:${gameId}`,(new Date()).getTime())
 				.exec();
 
 			io.of("/game").to(`game-${gameId}`).emit("start");
@@ -247,8 +250,31 @@ io.of("/game").on("connection", async (socket) => {
 				}
 			}, ABORT_SECONDS * 1000);
 			TimeoutsMap.set(gameId, t);
+			return
 		}
-	});
+
+		let [blackTimeLeft, whiteTimeLeft, whiteLastMove, blackLastMove, gameStartedDate] = await redis
+			.multi()
+			.get(`game:black_time_left:${gameId}`)
+			.get(`game:white_time_left:${gameId}`)
+			.get(`game:white_last_move:${gameId}`)
+			.get(`game:black_last_move:${gameId}`)
+			.get(`game:game_started_date:${gameId}`)
+			.exec();
+
+		let now = (new Date()).getTime()
+		if (+turn == 0) {
+			let m = +(blackLastMove || 0)
+			if (!blackLastMove)
+				m = +(gameStartedDate || 0)
+			whiteTimeLeft = +(whiteTimeLeft || SECONDS) - ((now - m)/1000)
+		} else if (whiteLastMove) {
+			blackTimeLeft = +(blackTimeLeft || SECONDS) - ((now - +whiteLastMove)/1000)
+		}
+
+		if (!blackTimeLeft || !whiteTimeLeft) return
+		socket.emit("gameState", history, +turn, i, +whiteTimeLeft, +blackTimeLeft);
+	})
 
 	socket.on("resign", async () => {
 		const gameId = await redis.get(`game:playerId:${socket.data.user.id}`);
