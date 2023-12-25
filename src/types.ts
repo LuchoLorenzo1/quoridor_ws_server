@@ -1,4 +1,4 @@
-import { Socket } from "socket.io";
+import { Server, Socket } from "socket.io";
 import { DefaultEventsMap } from "socket.io/dist/typed-events";
 
 export interface ServerToClientEvents {
@@ -38,6 +38,8 @@ export interface SocketData {
 }
 
 export type TSocket = Socket<ClientToServerEvents, ServerToClientEvents, DefaultEventsMap, SocketData>
+
+export type TIo = Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>
 
 export interface PawnPos {
   x: number;
