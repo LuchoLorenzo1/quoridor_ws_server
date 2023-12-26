@@ -1,3 +1,4 @@
+import { SECONDS } from "../constants";
 import redis from "../redisClient";
 import { TSocket } from "../types";
 import { v4 as uuidv4 } from "uuid"
@@ -31,6 +32,8 @@ export default function connectGameHandler(socket: TSocket) {
 				})
 				.lPush(`game:players:${gameId}`, players)
 				.set(`game:turn:${gameId}`, 0)
+				.set(`game:black_time_left:${gameId}`, SECONDS)
+				.set(`game:white_time_left:${gameId}`, SECONDS)
 				.exec();
 
 			playerSearching = null;
