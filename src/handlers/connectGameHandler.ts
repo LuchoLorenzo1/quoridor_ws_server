@@ -1,4 +1,4 @@
-import { SECONDS } from "../constants";
+import { INITIAL_WALLS, SECONDS } from "../constants";
 import redis from "../redisClient";
 import { TSocket } from "../types";
 import { v4 as uuidv4 } from "uuid";
@@ -34,6 +34,10 @@ export default function connectGameHandler(socket: TSocket) {
       .set(`game:turn:${gameId}`, 0)
       .set(`game:black_time_left:${gameId}`, SECONDS)
       .set(`game:white_time_left:${gameId}`, SECONDS)
+      .hSet(`game:walls_left:${gameId}`, {
+        black: INITIAL_WALLS,
+        white: INITIAL_WALLS,
+      })
       .exec();
 
     playerSearching = null;

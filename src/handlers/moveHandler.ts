@@ -1,5 +1,5 @@
 import { ABORT_SECONDS } from "../constants";
-import { isValidMove } from "../game";
+import { isValidMove, stringToMove } from "../game";
 import redis from "../redisClient";
 import { TSocket, TIo } from "../types";
 import { deleteGame } from "../utils";
@@ -21,6 +21,13 @@ export default function moveHandler(
 
     const state = isValidMove(history, move);
     if (!state) return;
+
+    if (stringToMove(move).wall)
+      await redis.hIncrBy(
+        `game:walls_left:${socket.data.gameId}`,
+        +turn == 0 ? "white" : "black",
+        -1,
+      );
 
     await redis
       .multi()

@@ -15,7 +15,7 @@ const matrix = (m: number, n: number): Wall[][] => {
 
 const columns = "abcdefghi";
 
-const stringToMove = (move: string): { pos: PawnPos; wall?: Wall } => {
+export const stringToMove = (move: string): { pos: PawnPos; wall?: Wall } => {
   let y = columns.indexOf(move[0]);
   let x = +move[1] - 1;
 
