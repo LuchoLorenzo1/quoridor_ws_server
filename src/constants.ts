@@ -1,2 +1,2 @@
-export const SECONDS = 50;
+export const SECONDS = 60;
 export const ABORT_SECONDS = 11;
