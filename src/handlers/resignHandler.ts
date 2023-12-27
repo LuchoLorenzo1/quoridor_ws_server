@@ -1,5 +1,5 @@
 import { TSocket, TIo } from "../types";
-import { deleteGame } from "../utils";
+import { deleteGame } from "../controllers/deleteGame";
 
 export default function resignHandler(io: TIo, socket: TSocket) {
   const resign = async () => {

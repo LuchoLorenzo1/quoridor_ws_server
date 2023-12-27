@@ -17,14 +17,7 @@ import resignHandler from "./handlers/resignHandler";
 dotenv.config();
 const PORT = process.env.PORT || 8000;
 
-const server = createServer((_, res) => {
-  res.writeHead(200, { "Content-Type": "application/json" });
-  res.end(
-    JSON.stringify({
-      data: "Hello World!",
-    }),
-  );
-});
+const server = createServer();
 
 const io = new Server<
   ClientToServerEvents,

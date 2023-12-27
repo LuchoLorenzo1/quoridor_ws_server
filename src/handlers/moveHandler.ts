@@ -2,7 +2,8 @@ import { ABORT_SECONDS } from "../constants";
 import { isValidMove, stringToMove } from "../game";
 import redis from "../redisClient";
 import { TSocket, TIo } from "../types";
-import { deleteGame } from "../utils";
+import { deleteGame } from "../controllers/deleteGame";
+import { saveGame } from "../controllers/saveGame";
 
 export default function moveHandler(
   io: TIo,
@@ -14,7 +15,7 @@ export default function moveHandler(
       .multi()
       .lRange(`game:history:${socket.data.gameId}`, 0, -1)
       .get(`game:turn:${socket.data.gameId}`)
-      .exec()) as [string[], string[], string];
+      .exec()) as [string[], string, string];
 
     if (turn == null) return null;
     if (socket.data.player != +turn) return;
@@ -39,6 +40,7 @@ export default function moveHandler(
       .exec();
 
     if (state == "win") {
+      await saveGame(socket.data.gameId, socket.data.players, +turn);
       io.of(socket.nsp.name)
         .to(`game-${socket.data.gameId}`)
         .emit("win", +turn);

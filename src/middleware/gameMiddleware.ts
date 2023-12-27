@@ -14,8 +14,6 @@ const gameMiddleware = async (socket: TSocket, next: any) => {
   socket.data.player = player;
   socket.data.players = players;
 
-  console.log("pasa el middleware", socket.data.user.id);
-
   next();
 };
 

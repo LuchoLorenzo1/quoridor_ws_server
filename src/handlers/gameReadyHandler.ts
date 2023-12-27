@@ -1,7 +1,7 @@
 import { ABORT_SECONDS, SECONDS } from "../constants";
 import redis from "../redisClient";
 import { TIo, TSocket } from "../types";
-import { deleteGame } from "../utils";
+import { deleteGame } from "../controllers/deleteGame";
 
 export default function gameReadyHandler(
   io: TIo,

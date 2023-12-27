@@ -32,6 +32,7 @@ export default function connectGameHandler(socket: TSocket) {
       })
       .lPush(`game:players:${gameId}`, players)
       .set(`game:turn:${gameId}`, 0)
+      .set(`game:game_time:${gameId}`, SECONDS)
       .set(`game:black_time_left:${gameId}`, SECONDS)
       .set(`game:white_time_left:${gameId}`, SECONDS)
       .hSet(`game:walls_left:${gameId}`, {
