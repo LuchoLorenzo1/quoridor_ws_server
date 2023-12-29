@@ -17,16 +17,17 @@ export const saveGame = async (
     .exec()) as [string[], string, string];
 
   let finishedAt = new Date();
-  const h = history.join(" ");
   const startedAt = new Date(+startedAtTimestamp);
+  const h = history.join(" ");
 
   console.log(
     `SAVING THIS GAME: ${gameId}, ${gameTime}, ${h}, ${players[0]}, ${
       players[1]
     }, ${winner == 0}, ${winningReason}, ${startedAt}, ${finishedAt}`,
   );
+  if (!history || !startedAt || !gameTime) return;
 
-  const res = await sql`
+  await sql`
 	INSERT INTO games
 	(id, time_seconds, history, white_player_id, black_player_id, white_winner, winning_reason, started_at, finished_at)
 	VALUES

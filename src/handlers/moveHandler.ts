@@ -39,14 +39,6 @@ export default function moveHandler(
       )
       .exec();
 
-    if (state == "win") {
-      await saveGame(socket.data.gameId, socket.data.players, +turn);
-      io.of(socket.nsp.name)
-        .to(`game-${socket.data.gameId}`)
-        .emit("win", +turn);
-      return await deleteGame(socket.data.gameId, socket.data.players);
-    }
-
     let blackLastMove: string | null | number = await redis.get(
       `game:black_last_move:${socket.data.gameId}`,
     );
@@ -69,29 +61,41 @@ export default function moveHandler(
     if (!whiteLastMove) whiteLastMove = now;
 
     if (+turn == 0) {
-      let t;
-      if (!blackLastMove) {
-        t = setTimeout(async () => {
-          let s = await redis.get(`game:black_last_move:${socket.data.gameId}`);
-          if (s == null) {
-            await deleteGame(socket.data.gameId, socket.data.players);
-            io.of(socket.nsp.name)
-              .to(`game-${socket.data.gameId}`)
-              .emit("abortGame");
-          }
-        }, ABORT_SECONDS * 1000);
-      } else {
-        t = setTimeout(async () => {
-          let s = await redis.get(`game:black_time_left:${socket.data.gameId}`);
-          if (s == null || +s == +blackTimeLeft) {
-            io.of(socket.nsp.name)
-              .to(`game-${socket.data.gameId}`)
-              .emit("win", 0, "on time");
-            await deleteGame(socket.data.gameId, socket.data.players);
-          }
-        }, +blackTimeLeft * 1000);
+      if (state != "win") {
+        let t;
+        if (!blackLastMove) {
+          t = setTimeout(async () => {
+            let s = await redis.get(
+              `game:black_last_move:${socket.data.gameId}`,
+            );
+            if (s == null) {
+              await deleteGame(socket.data.gameId, socket.data.players);
+              io.of(socket.nsp.name)
+                .to(`game-${socket.data.gameId}`)
+                .emit("abortGame");
+            }
+          }, ABORT_SECONDS * 1000);
+        } else {
+          t = setTimeout(async () => {
+            let s = await redis.get(
+              `game:black_time_left:${socket.data.gameId}`,
+            );
+            if (s == null || +s == +blackTimeLeft) {
+              io.of(socket.nsp.name)
+                .to(`game-${socket.data.gameId}`)
+                .emit("win", 0, "on time");
+              await saveGame(
+                socket.data.gameId,
+                socket.data.players,
+                0,
+                "time",
+              );
+              await deleteGame(socket.data.gameId, socket.data.players);
+            }
+          }, +blackTimeLeft * 1000);
+        }
+        TimeoutsMap.set(socket.data.gameId, t);
       }
-      TimeoutsMap.set(socket.data.gameId, t);
 
       if (!blackLastMove) blackLastMove = now;
       let diff = now - +blackLastMove;
@@ -100,16 +104,19 @@ export default function moveHandler(
       await redis.set(`game:white_last_move:${socket.data.gameId}`, now);
       await redis.set(`game:white_time_left:${socket.data.gameId}`, timeLeft);
     } else {
-      let t = setTimeout(async () => {
-        let s = await redis.get(`game:white_time_left:${socket.data.gameId}`);
-        if (s == null || +s == +whiteTimeLeft) {
-          io.of(socket.nsp.name)
-            .to(`game-${socket.data.gameId}`)
-            .emit("win", 1, "by timeout");
-          await deleteGame(socket.data.gameId, socket.data.players);
-        }
-      }, +whiteTimeLeft * 1000);
-      TimeoutsMap.set(socket.data.gameId, t);
+      if (state != "win") {
+        let t = setTimeout(async () => {
+          let s = await redis.get(`game:white_time_left:${socket.data.gameId}`);
+          if (s == null || +s == +whiteTimeLeft) {
+            io.of(socket.nsp.name)
+              .to(`game-${socket.data.gameId}`)
+              .emit("win", 1, "by timeout");
+            await saveGame(socket.data.gameId, socket.data.players, 1, "time");
+            await deleteGame(socket.data.gameId, socket.data.players);
+          }
+        }, +whiteTimeLeft * 1000);
+        TimeoutsMap.set(socket.data.gameId, t);
+      }
 
       if (!whiteLastMove) whiteLastMove = now;
       let diff = now - +whiteLastMove;
@@ -123,6 +130,14 @@ export default function moveHandler(
     socket.broadcast
       .to(`game-${socket.data.gameId}`)
       .emit("move", move, timeLeft);
+
+    if (state == "win") {
+      io.of(socket.nsp.name)
+        .to(`game-${socket.data.gameId}`)
+        .emit("win", +turn);
+      await saveGame(socket.data.gameId, socket.data.players, +turn);
+      return await deleteGame(socket.data.gameId, socket.data.players);
+    }
   };
 
   socket.on("move", move);

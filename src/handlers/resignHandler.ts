@@ -1,16 +1,19 @@
 import { TSocket, TIo } from "../types";
 import { deleteGame } from "../controllers/deleteGame";
+import { saveGame } from "../controllers/saveGame";
 
 export default function resignHandler(io: TIo, socket: TSocket) {
   const resign = async () => {
-    await deleteGame(socket.data.gameId, socket.data.players);
     io.of(socket.nsp.name)
       .to(`game-${socket.data.gameId}`)
-      .emit(
-        "win",
-        socket.data.players.indexOf(socket.data.user.id),
-        "by resignation",
-      );
+      .emit("win", socket.data.player == 0 ? 1 : 0, "by resignation");
+    await saveGame(
+      socket.data.gameId,
+      socket.data.players,
+      socket.data.player == 0 ? 1 : 0,
+      "resignation",
+    );
+    await deleteGame(socket.data.gameId, socket.data.players);
   };
 
   socket.on("resign", resign);
