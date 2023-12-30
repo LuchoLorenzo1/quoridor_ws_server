@@ -32,7 +32,7 @@ const io = new Server<
 });
 
 io.use(authMiddleware);
-io.on("connection", (socket) => connectGameHandler(socket));
+io.on("connection", (socket) => connectGameHandler(io, socket));
 
 const gameNamespace = io.of(
   /^\/game\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,

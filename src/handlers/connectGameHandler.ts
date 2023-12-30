@@ -1,33 +1,43 @@
 import { INITIAL_WALLS, SECONDS } from "../constants";
 import redis from "../redisClient";
-import { TSocket } from "../types";
+import { TIo, TSocket } from "../types";
 import { v4 as uuidv4 } from "uuid";
 
-let playerSearching: { socket: TSocket } | null;
-
-export default function connectGameHandler(socket: TSocket) {
+export default function connectGameHandler(io: TIo, socket: TSocket) {
   const searchGame = async () => {
-    if (!playerSearching) return (playerSearching = { socket });
+    const playerSearchingId = await redis.get("playerSearchingId");
+    const gameId = playerSearchingId
+      ? await redis.get(`game:playerId:${playerSearchingId}`)
+      : null;
 
-    let gameId = uuidv4();
+    if (!playerSearchingId || !gameId) {
+      await redis.set("playerSearchingId", socket.data.user.id, {
+        EX: 60 * 30,
+      });
+      const gameId = uuidv4();
+      await redis.set(`game:playerId:${socket.data.user.id}`, gameId, {
+        EX: 60 * 30,
+      });
+      socket.join(`game-${gameId}`);
+      return;
+    }
 
-    playerSearching.socket.emit("foundGame", gameId);
-    socket.emit("foundGame", gameId);
+    await redis.del("playerSearchingId");
 
     socket.join(`game-${gameId}`);
-    playerSearching.socket.join(`game-${gameId}`);
+    io.to(`game-${gameId}`).emit("foundGame", gameId);
 
     let players;
     if (Math.random() < 0.5) {
-      players = [socket.data.user.id, playerSearching.socket.data.user.id];
+      players = [socket.data.user.id, playerSearchingId];
     } else {
-      players = [playerSearching.socket.data.user.id, socket.data.user.id];
+      players = [playerSearchingId, socket.data.user.id];
     }
 
     await redis
       .multi()
       .set(`game:playerId:${socket.data.user.id}`, gameId, { EX: 60 * 30 }) // 30 minutos expire
-      .set(`game:playerId:${playerSearching.socket.data.user.id}`, gameId, {
+      .set(`game:playerId:${playerSearchingId}`, gameId, {
         EX: 60 * 30,
       })
       .lPush(`game:players:${gameId}`, players)
@@ -40,8 +50,6 @@ export default function connectGameHandler(socket: TSocket) {
         white: INITIAL_WALLS,
       })
       .exec();
-
-    playerSearching = null;
   };
 
   socket.on("reconnectGame", async () => {
