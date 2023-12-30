@@ -20,12 +20,12 @@ export const saveGame = async (
   const startedAt = new Date(+startedAtTimestamp);
   const h = history.join(" ");
 
+  if (!history || !startedAt || !gameTime) return;
   console.log(
     `SAVING THIS GAME: ${gameId}, ${gameTime}, ${h}, ${players[0]}, ${
       players[1]
     }, ${winner == 0}, ${winningReason}, ${startedAt}, ${finishedAt}`,
   );
-  if (!history || !startedAt || !gameTime) return;
 
   await sql`
 	INSERT INTO games

@@ -171,6 +171,9 @@ export const isValidMove = (
   let blackPos: PawnPos = BLACK_START;
   let whitePos: PawnPos = WHITE_START;
 
+  let whiteWallsLeft: number = 10;
+  let blackWallsLeft: number = 10;
+
   history.forEach((move, i) => {
     let { pos, wall } = stringToMove(move);
     if (wall) {
@@ -181,6 +184,11 @@ export const isValidMove = (
         board[pos.y][pos.x].row = 1;
         board[pos.y + 1][pos.x].row = 2;
       }
+      if (i % 2 == 0) {
+        whiteWallsLeft--;
+      } else {
+        blackWallsLeft--;
+      }
     } else if (i % 2 == 0) {
       whitePos = pos;
     } else {
@@ -190,17 +198,20 @@ export const isValidMove = (
 
   let { pos, wall } = stringToMove(move);
   if (wall) {
+    if (history.length % 2 == 0 && whiteWallsLeft == 0) return false;
+    if (history.length % 2 == 1 && blackWallsLeft == 0) return false;
+
     if (wall.col == 1) {
       if (pickVerticalWall(pos.x, pos.y, board)) {
-        board[pos.y][pos.x] = { row: 1, col: board[pos.y][pos.x].col };
-        board[pos.y + 1][pos.x] = { row: 2, col: board[pos.y + 1][pos.x].col };
+        board[pos.y][pos.x] = { col: 1, row: board[pos.y][pos.x].row };
+        board[pos.y][pos.x + 1] = { col: 2, row: board[pos.y][pos.x + 1].row };
       } else {
         return false;
       }
     } else {
       if (pickHorizontalWall(pos.x, pos.y, board)) {
-        board[pos.y][pos.x] = { col: 1, row: board[pos.y][pos.x].row };
-        board[pos.y][pos.x + 1] = { col: 2, row: board[pos.y][pos.x + 1].row };
+        board[pos.y][pos.x] = { row: 1, col: board[pos.y][pos.x].col };
+        board[pos.y + 1][pos.x] = { row: 2, col: board[pos.y + 1][pos.x].col };
       } else {
         return false;
       }
