@@ -21,7 +21,7 @@ export default function moveHandler(
     if (socket.data.player != +turn) return;
 
     const state = isValidMove(history, move);
-    if (!state) return;
+    if (!state) return console.log("INVALID MOVE");
 
     if (stringToMove(move).wall)
       await redis.hIncrBy(

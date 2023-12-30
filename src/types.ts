@@ -9,6 +9,8 @@ export interface ServerToClientEvents {
   reconnectGame: (id: string) => void;
   win: (player: number, reason?: string) => void;
   abortGame: () => void;
+  chatMessage: (message: string) => void;
+  chat: (messages: string[]) => void;
 }
 
 export interface ClientToServerEvents {
@@ -18,6 +20,8 @@ export interface ClientToServerEvents {
   searchGame: () => void;
   ready: () => void;
   resign: () => void;
+  chatMessage: (message: string) => void;
+  getChat: (message: string) => void;
 }
 
 export interface InterServerEvents {

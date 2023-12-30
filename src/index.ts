@@ -13,6 +13,7 @@ import connectGameHandler from "./handlers/connectGameHandler";
 import gameReadyHandler from "./handlers/gameReadyHandler";
 import moveHandler from "./handlers/moveHandler";
 import resignHandler from "./handlers/resignHandler";
+import chatHandler from "./handlers/chatHandler";
 
 dotenv.config();
 const PORT = process.env.PORT || 8000;
@@ -45,6 +46,7 @@ gameNamespace.on("connection", (socket) => {
   gameReadyHandler(io, socket, TimeoutsMap);
   moveHandler(io, socket, TimeoutsMap);
   resignHandler(io, socket);
+  chatHandler(io, socket);
 });
 
 console.log(`🚀 Server listening on ${PORT}`);
