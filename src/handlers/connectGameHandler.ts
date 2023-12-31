@@ -1,28 +1,46 @@
-import { INITIAL_WALLS, SECONDS } from "../constants";
+import { INITIAL_WALLS } from "../constants";
 import redis from "../redisClient";
 import { TIo, TSocket } from "../types";
 import { v4 as uuidv4 } from "uuid";
 
 export default function connectGameHandler(io: TIo, socket: TSocket) {
-  const searchGame = async () => {
-    const playerSearchingId = await redis.get("playerSearchingId");
-    const gameId = playerSearchingId
-      ? await redis.get(`game:playerId:${playerSearchingId}`)
-      : null;
+  const cancelGameSearch = async (time: number) => {
+    await redis.del(`playerSearchingId:${time}`);
+    await redis.del(`searchingGame:playerId:${socket.data.user.id}`);
+  };
+
+  const searchGame = async (time: number) => {
+    const playerSearchingId = await redis.get(`playerSearchingId:${time}`);
+    const playerSearching = (await redis.hGetAll(
+      `searchingGame:playerId:${socket.data.user.id}`,
+    )) as { gameId: string; time: string } | null;
+
+    if (playerSearching && +playerSearching.time != time) {
+      cancelGameSearch(+playerSearching.time);
+    }
+
+    const searchingGame = (await redis.hGetAll(
+      `searchingGame:playerId:${playerSearchingId}`,
+    )) as { gameId: string; time: string } | null;
+    const gameId = searchingGame?.gameId;
 
     if (!playerSearchingId || !gameId) {
-      await redis.set("playerSearchingId", socket.data.user.id, {
+      await redis.set(`playerSearchingId:${time}`, socket.data.user.id, {
         EX: 60 * 30,
       });
       const gameId = uuidv4();
-      await redis.set(`game:playerId:${socket.data.user.id}`, gameId, {
-        EX: 60 * 30,
+      await redis.hSet(`searchingGame:playerId:${socket.data.user.id}`, {
+        gameId,
+        time,
       });
       socket.join(`game-${gameId}`);
       return;
     }
 
-    await redis.del("playerSearchingId");
+    if (playerSearchingId === socket.data.user.id) return;
+
+    await redis.del(`playerSearchingId:${time}`);
+    await redis.del(`searchingGame:playerId:${playerSearchingId}`);
 
     socket.join(`game-${gameId}`);
     io.to(`game-${gameId}`).emit("foundGame", gameId);
@@ -42,9 +60,9 @@ export default function connectGameHandler(io: TIo, socket: TSocket) {
       })
       .lPush(`game:players:${gameId}`, players)
       .set(`game:turn:${gameId}`, 0)
-      .set(`game:game_time:${gameId}`, SECONDS)
-      .set(`game:black_time_left:${gameId}`, SECONDS)
-      .set(`game:white_time_left:${gameId}`, SECONDS)
+      .set(`game:game_time:${gameId}`, time)
+      .set(`game:black_time_left:${gameId}`, time)
+      .set(`game:white_time_left:${gameId}`, time)
       .hSet(`game:walls_left:${gameId}`, {
         black: INITIAL_WALLS,
         white: INITIAL_WALLS,
@@ -60,4 +78,5 @@ export default function connectGameHandler(io: TIo, socket: TSocket) {
   });
 
   socket.on("searchGame", searchGame);
+  socket.on("cancelSearchGame", cancelGameSearch);
 }
