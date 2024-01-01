@@ -5,9 +5,7 @@ import { v4 as uuidv4 } from "uuid";
 
 export default async function connectGameHandler(io: TIo, socket: TSocket) {
   await redis.hIncrBy("stats", "online", 1);
-  console.log("incrementando");
   socket.on("disconnect", () => {
-    console.log("decrementando");
     redis.hIncrBy("stats", "online", -1);
   });
 

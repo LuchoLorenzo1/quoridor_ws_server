@@ -21,6 +21,7 @@ export interface ClientToServerEvents {
   searchGame: (time: number) => void;
   cancelSearchGame: (time: number) => void;
   ready: () => void;
+  abort: () => void;
   resign: () => void;
   chatMessage: (message: string) => void;
   getChat: (message: string) => void;
