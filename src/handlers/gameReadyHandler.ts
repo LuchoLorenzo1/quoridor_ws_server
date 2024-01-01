@@ -58,7 +58,6 @@ export default function gameReadyHandler(
 
     if (!blackTimeLeft || !whiteTimeLeft || !wallsLeft) return;
 
-    socket.join(`game-${socket.data.gameId}`);
     socket.emit("gameState", {
       history: (history || []) as string[],
       turn: +(turn || -1),
@@ -86,15 +85,13 @@ export default function gameReadyHandler(
     await redis.set(`game:playersReady:${socket.data.gameId}`, 2);
     await redis.set(`game:game_started_date:${socket.data.gameId}`, Date.now());
 
-    io.of(socket.nsp.name).to(`game-${socket.data.gameId}`).emit("start");
+    io.of(socket.nsp.name).emit("start");
 
     let t = setTimeout(async () => {
       let s = await redis.get(`game:white_last_move:${socket.data.gameId}`);
       if (s == null) {
         await deleteGame(socket.data.gameId, socket.data.players);
-        io.of(socket.nsp.name)
-          .to(`game-${socket.data.gameId}`)
-          .emit("abortGame");
+        io.of(socket.nsp.name).emit("abortGame");
       }
     }, ABORT_SECONDS * 1000);
     TimeoutsMap.set(socket.data.gameId, t);

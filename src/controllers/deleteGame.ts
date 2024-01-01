@@ -1,6 +1,7 @@
 import redis from "../redisClient";
 
 export const deleteGame = async (gameId: string, players: string[]) => {
+  console.log("deleting game", gameId);
   return await redis
     .multi()
     .del(`game:playerId:${players[0]}`)
@@ -17,5 +18,6 @@ export const deleteGame = async (gameId: string, players: string[]) => {
     .del(`game:game_started_date:${gameId}`)
     .del(`game:walls_left:${gameId}`)
     .del(`game:chat:${gameId}`)
+    .hIncrBy("stats", "playing", -2)
     .exec();
 };

@@ -70,9 +70,7 @@ export default function moveHandler(
             );
             if (s == null) {
               await deleteGame(socket.data.gameId, socket.data.players);
-              io.of(socket.nsp.name)
-                .to(`game-${socket.data.gameId}`)
-                .emit("abortGame");
+              io.of(socket.nsp.name).emit("abortGame");
             }
           }, ABORT_SECONDS * 1000);
         } else {
@@ -81,16 +79,13 @@ export default function moveHandler(
               `game:black_time_left:${socket.data.gameId}`,
             );
             if (s == null || +s == +blackTimeLeft) {
-              io.of(socket.nsp.name)
-                .to(`game-${socket.data.gameId}`)
-                .emit("win", 0, "on time");
+              io.of(socket.nsp.name).emit("win", 0, "on time");
               await saveGame(
                 socket.data.gameId,
                 socket.data.players,
                 0,
                 "time",
               );
-              await deleteGame(socket.data.gameId, socket.data.players);
             }
           }, +blackTimeLeft * 1000);
         }
@@ -108,11 +103,8 @@ export default function moveHandler(
         let t = setTimeout(async () => {
           let s = await redis.get(`game:white_time_left:${socket.data.gameId}`);
           if (s == null || +s == +whiteTimeLeft) {
-            io.of(socket.nsp.name)
-              .to(`game-${socket.data.gameId}`)
-              .emit("win", 1, "by timeout");
+            io.of(socket.nsp.name).emit("win", 1, "by timeout");
             await saveGame(socket.data.gameId, socket.data.players, 1, "time");
-            await deleteGame(socket.data.gameId, socket.data.players);
           }
         }, +whiteTimeLeft * 1000);
         TimeoutsMap.set(socket.data.gameId, t);
@@ -127,16 +119,11 @@ export default function moveHandler(
     }
 
     callback(timeLeft);
-    socket.broadcast
-      .to(`game-${socket.data.gameId}`)
-      .emit("move", move, timeLeft);
+    socket.broadcast.emit("move", move, timeLeft);
 
     if (state == "win") {
-      io.of(socket.nsp.name)
-        .to(`game-${socket.data.gameId}`)
-        .emit("win", +turn);
+      io.of(socket.nsp.name).emit("win", +turn);
       await saveGame(socket.data.gameId, socket.data.players, +turn);
-      return await deleteGame(socket.data.gameId, socket.data.players);
     }
   };
 

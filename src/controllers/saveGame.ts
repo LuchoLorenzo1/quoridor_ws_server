@@ -1,5 +1,6 @@
 import sql from "../postgresClient";
 import redis from "../redisClient";
+import { deleteGame } from "./deleteGame";
 
 type winningReason = "play" | "resignation" | "time";
 
@@ -35,4 +36,6 @@ export const saveGame = async (
     winner == 0
   }, ${winningReason}, ${startedAt}, ${finishedAt})
 	`;
+
+  await deleteGame(gameId, players);
 };

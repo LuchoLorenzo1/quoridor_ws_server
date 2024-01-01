@@ -3,13 +3,22 @@ import redis from "../redisClient";
 import { TIo, TSocket } from "../types";
 import { v4 as uuidv4 } from "uuid";
 
-export default function connectGameHandler(io: TIo, socket: TSocket) {
+export default async function connectGameHandler(io: TIo, socket: TSocket) {
+  await redis.hIncrBy("stats", "online", 1);
+  console.log("incrementando");
+  socket.on("disconnect", () => {
+    console.log("decrementando");
+    redis.hIncrBy("stats", "online", -1);
+  });
+
   const cancelGameSearch = async (time: number) => {
     await redis.del(`playerSearchingId:${time}`);
     await redis.del(`searchingGame:playerId:${socket.data.user.id}`);
   };
 
   const searchGame = async (time: number) => {
+    if (!time) return;
+
     const playerSearchingId = await redis.get(`playerSearchingId:${time}`);
     const playerSearching = (await redis.hGetAll(
       `searchingGame:playerId:${socket.data.user.id}`,
@@ -19,10 +28,13 @@ export default function connectGameHandler(io: TIo, socket: TSocket) {
       cancelGameSearch(+playerSearching.time);
     }
 
-    const searchingGame = (await redis.hGetAll(
-      `searchingGame:playerId:${playerSearchingId}`,
-    )) as { gameId: string; time: string } | null;
-    const gameId = searchingGame?.gameId;
+    let gameId;
+    if (playerSearching) {
+      const searchingGame = (await redis.hGetAll(
+        `searchingGame:playerId:${playerSearchingId}`,
+      )) as { gameId: string; time: string } | null;
+      gameId = searchingGame?.gameId;
+    }
 
     if (!playerSearchingId || !gameId) {
       await redis.set(`playerSearchingId:${time}`, socket.data.user.id, {
@@ -44,6 +56,7 @@ export default function connectGameHandler(io: TIo, socket: TSocket) {
 
     socket.join(`game-${gameId}`);
     io.to(`game-${gameId}`).emit("foundGame", gameId);
+    io.in(`game-${gameId}`).socketsLeave(["home", `game-${gameId}`]);
 
     let players;
     if (Math.random() < 0.5) {
@@ -67,14 +80,17 @@ export default function connectGameHandler(io: TIo, socket: TSocket) {
         black: INITIAL_WALLS,
         white: INITIAL_WALLS,
       })
+      .hIncrBy("stats", "playing", 2)
       .exec();
   };
 
-  socket.on("reconnectGame", async () => {
+  socket.on("home", async () => {
+    socket.join("home");
+    const stats = (await redis.hGetAll("stats")) as { playing: string };
+    if (stats) socket.emit("stats", stats);
+
     const gameId = await redis.get(`game:playerId:${socket.data.user.id}`);
-    if (gameId) {
-      socket.emit("reconnectGame", gameId);
-    }
+    if (gameId) socket.emit("reconnectGame", gameId);
   });
 
   socket.on("searchGame", searchGame);

@@ -14,6 +14,7 @@ import gameReadyHandler from "./handlers/gameReadyHandler";
 import moveHandler from "./handlers/moveHandler";
 import resignHandler from "./handlers/resignHandler";
 import chatHandler from "./handlers/chatHandler";
+import statsInterval from "./controllers/statsInterval";
 
 dotenv.config();
 const PORT = process.env.PORT || 8000;
@@ -33,7 +34,17 @@ const io = new Server<
 });
 
 io.use(authMiddleware);
-io.on("connection", (socket) => connectGameHandler(io, socket));
+io.on("connection", async (socket) => {
+  console.log(
+    "connected to / ",
+    socket.id,
+    socket.data.user.name,
+    socket.conn.remoteAddress,
+  );
+  connectGameHandler(io, socket);
+});
+
+statsInterval(io);
 
 const gameNamespace = io.of(
   /^\/game\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
@@ -43,6 +54,11 @@ gameNamespace.use(gameMiddleware);
 
 const TimeoutsMap: Map<string, NodeJS.Timeout> = new Map();
 gameNamespace.on("connection", (socket) => {
+  console.log(
+    `connected to ${socket.nsp.name.slice(0, 8)} `,
+    socket.id,
+    socket.data.user.name,
+  );
   gameReadyHandler(io, socket, TimeoutsMap);
   moveHandler(io, socket, TimeoutsMap);
   resignHandler(io, socket);

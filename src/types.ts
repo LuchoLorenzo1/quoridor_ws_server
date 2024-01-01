@@ -11,12 +11,13 @@ export interface ServerToClientEvents {
   abortGame: () => void;
   chatMessage: (message: string) => void;
   chat: (messages: string[]) => void;
+  stats: ({ playing }: { playing: string }) => void;
 }
 
 export interface ClientToServerEvents {
   move: (move: string, callback: any) => void;
   getGame: () => void;
-  reconnectGame: () => void;
+  home: () => void;
   searchGame: (time: number) => void;
   cancelSearchGame: (time: number) => void;
   ready: () => void;
