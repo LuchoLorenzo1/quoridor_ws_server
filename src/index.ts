@@ -15,6 +15,7 @@ import moveHandler from "./handlers/moveHandler";
 import resignHandler from "./handlers/resignHandler";
 import chatHandler from "./handlers/chatHandler";
 import statsInterval from "./controllers/statsInterval";
+import rematchHandler from "./handlers/rematchHandler";
 
 dotenv.config();
 const PORT = process.env.PORT || 8000;
@@ -63,6 +64,7 @@ gameNamespace.on("connection", (socket) => {
   moveHandler(io, socket, TimeoutsMap);
   resignHandler(io, socket);
   chatHandler(io, socket);
+  rematchHandler(io, socket);
 });
 
 console.log(`🚀 Server listening on ${PORT}`);

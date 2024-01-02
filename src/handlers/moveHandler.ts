@@ -78,7 +78,7 @@ export default function moveHandler(
             let s = await redis.get(
               `game:black_time_left:${socket.data.gameId}`,
             );
-            if (s == null || +s == +blackTimeLeft) {
+            if (s != null && +s == +blackTimeLeft) {
               io.of(socket.nsp.name).emit("win", 0, "on time");
               await saveGame(
                 socket.data.gameId,
@@ -102,7 +102,7 @@ export default function moveHandler(
       if (state != "win") {
         let t = setTimeout(async () => {
           let s = await redis.get(`game:white_time_left:${socket.data.gameId}`);
-          if (s == null || +s == +whiteTimeLeft) {
+          if (s != null && +s == +whiteTimeLeft) {
             io.of(socket.nsp.name).emit("win", 1, "by timeout");
             await saveGame(socket.data.gameId, socket.data.players, 1, "time");
           }

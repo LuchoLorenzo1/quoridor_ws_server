@@ -9,7 +9,6 @@ export const deleteGame = async (gameId: string, players: string[]) => {
     .del(`game:history:${gameId}`)
     .del(`game:players:${gameId}`)
     .del(`game:turn:${gameId}`)
-    .del(`game:game_time:${gameId}`)
     .del(`game:black_time_left:${gameId}`)
     .del(`game:white_time_left:${gameId}`)
     .del(`game:black_last_move:${gameId}`)

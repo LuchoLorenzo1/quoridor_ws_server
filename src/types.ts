@@ -10,6 +10,8 @@ export interface ServerToClientEvents {
   win: (player: number, reason?: string) => void;
   abortGame: () => void;
   chatMessage: (message: string) => void;
+  rematch: (playerId: string) => void;
+  rematchGame: (gameId: string) => void;
   chat: (messages: string[]) => void;
   stats: ({ playing }: { playing: string }) => void;
 }
@@ -25,6 +27,9 @@ export interface ClientToServerEvents {
   resign: () => void;
   chatMessage: (message: string) => void;
   getChat: (message: string) => void;
+  rematch: () => void;
+  rejectRematch: () => void;
+  cancelRematch: () => void;
 }
 
 export interface InterServerEvents {

@@ -1,17 +1,27 @@
-import { INITIAL_WALLS } from "../constants";
+import createGame from "../controllers/createGame";
 import redis from "../redisClient";
 import { TIo, TSocket } from "../types";
 import { v4 as uuidv4 } from "uuid";
 
 export default async function connectGameHandler(io: TIo, socket: TSocket) {
   await redis.hIncrBy("stats", "online", 1);
-  socket.on("disconnect", () => {
+  socket.on("disconnect", async () => {
     redis.hIncrBy("stats", "online", -1);
+    cancelGameSearch();
   });
 
-  const cancelGameSearch = async (time: number) => {
-    await redis.del(`playerSearchingId:${time}`);
-    await redis.del(`searchingGame:playerId:${socket.data.user.id}`);
+  const cancelGameSearch = async (time?: number | string) => {
+    if (!time) {
+      const playerSearching = (await redis.hGetAll(
+        `searchingGame:playerId:${socket.data.user.id}`,
+      )) as { gameId: string; time: string } | null;
+      time = playerSearching?.time;
+    }
+
+    if (time) {
+      await redis.del(`searchingGame:playerId:${socket.data.user.id}`);
+      await redis.del(`playerSearchingId:${time}`);
+    }
   };
 
   const searchGame = async (time: number) => {
@@ -56,30 +66,7 @@ export default async function connectGameHandler(io: TIo, socket: TSocket) {
     io.to(`game-${gameId}`).emit("foundGame", gameId);
     io.in(`game-${gameId}`).socketsLeave(["home", `game-${gameId}`]);
 
-    let players;
-    if (Math.random() < 0.5) {
-      players = [socket.data.user.id, playerSearchingId];
-    } else {
-      players = [playerSearchingId, socket.data.user.id];
-    }
-
-    await redis
-      .multi()
-      .set(`game:playerId:${socket.data.user.id}`, gameId, { EX: 60 * 30 }) // 30 minutos expire
-      .set(`game:playerId:${playerSearchingId}`, gameId, {
-        EX: 60 * 30,
-      })
-      .lPush(`game:players:${gameId}`, players)
-      .set(`game:turn:${gameId}`, 0)
-      .set(`game:game_time:${gameId}`, time)
-      .set(`game:black_time_left:${gameId}`, time)
-      .set(`game:white_time_left:${gameId}`, time)
-      .hSet(`game:walls_left:${gameId}`, {
-        black: INITIAL_WALLS,
-        white: INITIAL_WALLS,
-      })
-      .hIncrBy("stats", "playing", 2)
-      .exec();
+    await createGame(gameId, playerSearchingId, socket.data.user.id, time);
   };
 
   socket.on("home", async () => {

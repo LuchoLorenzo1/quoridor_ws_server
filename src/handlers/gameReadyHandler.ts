@@ -98,6 +98,7 @@ export default function gameReadyHandler(
   };
 
   socket.on("disconnect", async () => {
+    console.log("disconnect", socket.id);
     socket.leave(`game-${socket.data.gameId}`);
   });
 
