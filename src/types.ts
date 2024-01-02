@@ -68,10 +68,6 @@ interface GameData {
   players: string[];
   whiteTimeLeft: number;
   blackTimeLeft: number;
-  wallsLeft: {
-    white: number;
-    black: number;
-  };
 }
 
 export interface PawnPos {

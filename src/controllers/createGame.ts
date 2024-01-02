@@ -1,4 +1,3 @@
-import { INITIAL_WALLS } from "../constants";
 import redis from "../redisClient";
 
 const createGame = async (
@@ -23,10 +22,6 @@ const createGame = async (
     .set(`game:game_time:${gameId}`, time, { EX: 60 * 15 })
     .set(`game:black_time_left:${gameId}`, time)
     .set(`game:white_time_left:${gameId}`, time)
-    .hSet(`game:walls_left:${gameId}`, {
-      black: INITIAL_WALLS,
-      white: INITIAL_WALLS,
-    })
     .hIncrBy("stats", "playing", 2)
     .exec();
 };

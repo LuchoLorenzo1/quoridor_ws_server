@@ -23,13 +23,6 @@ export default function moveHandler(
     const state = isValidMove(history, move);
     if (!state) return console.log("INVALID MOVE");
 
-    if (stringToMove(move).wall)
-      await redis.hIncrBy(
-        `game:walls_left:${socket.data.gameId}`,
-        +turn == 0 ? "white" : "black",
-        -1,
-      );
-
     await redis
       .multi()
       .rPush(`game:history:${socket.data.gameId}`, move)

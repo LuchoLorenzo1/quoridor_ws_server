@@ -17,7 +17,6 @@ export default function gameReadyHandler(
       whiteLastMove,
       blackLastMove,
       gameStartedDate,
-      wallsLeft,
     ] = (await redis
       .multi()
       .lRange(`game:history:${socket.data.gameId}`, 0, -1)
@@ -27,7 +26,6 @@ export default function gameReadyHandler(
       .get(`game:white_last_move:${socket.data.gameId}`)
       .get(`game:black_last_move:${socket.data.gameId}`)
       .get(`game:game_started_date:${socket.data.gameId}`)
-      .hGetAll(`game:walls_left:${socket.data.gameId}`)
       .exec()) as [
       string[],
       string,
@@ -56,7 +54,7 @@ export default function gameReadyHandler(
       whiteTimeLeft = SECONDS;
     }
 
-    if (!blackTimeLeft || !whiteTimeLeft || !wallsLeft) return;
+    if (!blackTimeLeft || !whiteTimeLeft) return;
 
     socket.emit("gameState", {
       history: (history || []) as string[],
@@ -65,10 +63,6 @@ export default function gameReadyHandler(
       whiteTimeLeft: +whiteTimeLeft,
       blackTimeLeft: +blackTimeLeft,
       players: socket.data.players,
-      wallsLeft: {
-        white: +wallsLeft.white,
-        black: +wallsLeft.black,
-      },
     });
   };
 
@@ -97,10 +91,6 @@ export default function gameReadyHandler(
     TimeoutsMap.set(socket.data.gameId, t);
   };
 
-  socket.on("disconnect", async () => {
-    console.log("disconnect", socket.id);
-    socket.leave(`game-${socket.data.gameId}`);
-  });
 
   socket.on("getGame", getGame);
   socket.on("ready", ready);
