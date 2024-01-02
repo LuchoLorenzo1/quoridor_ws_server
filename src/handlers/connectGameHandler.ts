@@ -1,4 +1,5 @@
 import createGame from "../controllers/createGame";
+import { saveGame } from "../controllers/saveGame";
 import redis from "../redisClient";
 import { TIo, TSocket } from "../types";
 import { v4 as uuidv4 } from "uuid";
@@ -34,6 +35,28 @@ export default async function connectGameHandler(io: TIo, socket: TSocket) {
 
     if (playerSearching && +playerSearching.time != time) {
       cancelGameSearch(+playerSearching.time);
+    }
+
+    const playingGameId = await redis.get(
+      `game:playerId:${socket.data.user.id}`,
+    );
+    if (playingGameId != null) {
+      const gameState = await redis.get(`game:state:${playingGameId}`);
+      if (gameState != "playing") {
+        await redis.del(`game:playerId:${socket.data.user.id}`);
+      } else {
+        const players = await redis.lRange(
+          `game:players:${playingGameId}`,
+          0,
+          -1,
+        );
+        if (players != null) {
+          const winner = players[0] == socket.data.user.id ? 1 : 0;
+          console.log("winner", winner);
+          io.of(`/game/${playingGameId}`).emit("win", winner, "by resignation");
+          saveGame(playingGameId, players, winner, "resignation");
+        }
+      }
     }
 
     let gameId;
