@@ -1,5 +1,5 @@
 import { ABORT_SECONDS } from "../constants";
-import { isValidMove, stringToMove } from "../game";
+import { isValidMove } from "../game";
 import redis from "../redisClient";
 import { TSocket, TIo } from "../types";
 import { deleteGame } from "../controllers/deleteGame";
@@ -58,12 +58,19 @@ export default function moveHandler(
         let t;
         if (!blackLastMove) {
           t = setTimeout(async () => {
+            const gameState = await redis.get(
+              `game:state:${socket.data.gameId}`,
+            );
+            if (gameState != "playing") return;
             let s = await redis.get(
               `game:black_last_move:${socket.data.gameId}`,
             );
             if (s == null) {
               await deleteGame(socket.data.gameId, socket.data.players);
               io.of(socket.nsp.name).emit("abortGame");
+              await redis.set(`game:state:${socket.data.gameId}`, "aborted", {
+                EX: 60 * 15,
+              });
             }
           }, ABORT_SECONDS * 1000);
         } else {

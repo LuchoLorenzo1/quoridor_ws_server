@@ -22,6 +22,8 @@ export const saveGame = async (
   const h = history.join(" ");
 
   if (!history || !startedAt || !gameTime) return;
+
+  await redis.set(`game:state:${gameId}`, "finished", { EX: 60 * 15 });
   console.log(
     `SAVING THIS GAME: ${gameId}, ${gameTime}, ${h}, ${players[0]}, ${
       players[1]

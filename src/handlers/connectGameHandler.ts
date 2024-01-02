@@ -71,7 +71,10 @@ export default async function connectGameHandler(io: TIo, socket: TSocket) {
 
   socket.on("home", async () => {
     socket.join("home");
-    const stats = (await redis.hGetAll("stats")) as { playing: string };
+    const stats = (await redis.hGetAll("stats")) as {
+      playing: string;
+      online: string;
+    };
     if (stats) socket.emit("stats", stats);
 
     const gameId = await redis.get(`game:playerId:${socket.data.user.id}`);

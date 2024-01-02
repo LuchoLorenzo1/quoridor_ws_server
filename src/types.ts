@@ -13,7 +13,9 @@ export interface ServerToClientEvents {
   rematch: (playerId: string) => void;
   rematchGame: (gameId: string) => void;
   chat: (messages: string[]) => void;
-  stats: ({ playing }: { playing: string }) => void;
+  stats: (stats: { playing: string; online: string }) => void;
+  playerConnected: (playerId: string) => void;
+  playerDisconnected: (playerId: string) => void;
 }
 
 export interface ClientToServerEvents {

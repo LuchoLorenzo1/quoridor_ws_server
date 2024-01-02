@@ -11,6 +11,11 @@ const gameMiddleware = async (socket: TSocket, next: any) => {
   let player = players.indexOf(socket.data.user.id);
   if (player < 0) return next(new Error("This user is not playing this game"));
 
+  await redis.del(
+    `game:disconnected:${socket.data.user.id}:${socket.data.gameId}`,
+  );
+  socket.broadcast.emit("playerConnected", socket.data.user.id);
+
   socket.data.player = player;
   socket.data.players = players;
 

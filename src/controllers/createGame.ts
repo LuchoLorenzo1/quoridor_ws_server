@@ -20,6 +20,7 @@ const createGame = async (
     .lPush(`game:players:${gameId}`, players)
     .set(`game:turn:${gameId}`, 0)
     .set(`game:game_time:${gameId}`, time, { EX: 60 * 15 })
+    .set(`game:state:${gameId}`, "playing", { EX: 60 * 15 })
     .set(`game:black_time_left:${gameId}`, time)
     .set(`game:white_time_left:${gameId}`, time)
     .hIncrBy("stats", "playing", 2)

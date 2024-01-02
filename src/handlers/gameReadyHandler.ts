@@ -91,7 +91,6 @@ export default function gameReadyHandler(
     TimeoutsMap.set(socket.data.gameId, t);
   };
 
-
   socket.on("getGame", getGame);
   socket.on("ready", ready);
 }
