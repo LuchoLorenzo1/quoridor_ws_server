@@ -12,6 +12,8 @@ const disconnectGameHandler = (io: TIo, socket: Socket) => {
     if (gameState != "playing") {
       await redis.del(`matchmaking:rematch:${socket.data.gameId}`);
       io.of(socket.nsp.name).emit("rematch", "");
+	  if (socket.data.player)
+		  io.of(socket.nsp.name).emit("leftChat", socket.data.player);
       return;
     }
 
