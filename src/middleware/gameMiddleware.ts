@@ -8,8 +8,13 @@ const gameMiddleware = async (socket: TSocket, next: any) => {
   let players = await redis.lRange(`game:players:${socket.data.gameId}`, 0, -1);
   if (!players) return next(new Error("This game is not being played"));
 
-  let player = players.indexOf(socket.data.user.id);
-  if (player < 0) return next(new Error("This user is not playing this game"));
+  let player: number | null = players.indexOf(socket.data.user.id);
+  if (player < 0) {
+    player = null;
+    socket.join("viewer");
+  } else {
+    socket.join("player");
+  }
 
   await redis.del(
     `game:disconnected:${socket.data.user.id}:${socket.data.gameId}`,

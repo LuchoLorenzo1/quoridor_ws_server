@@ -62,11 +62,14 @@ gameNamespace.on("connection", (socket) => {
     socket.data.user.name,
   );
   gameReadyHandler(io, socket, TimeoutsMap);
-  moveHandler(io, socket, TimeoutsMap);
-  resignHandler(io, socket);
   chatHandler(io, socket);
-  rematchHandler(io, socket);
   disconnectGameHandler(io, socket);
+
+  if (socket.data.player != null) {
+    rematchHandler(io, socket);
+    resignHandler(io, socket);
+    moveHandler(io, socket, TimeoutsMap);
+  }
 });
 
 console.log(`🚀 Server listening on ${PORT}`);

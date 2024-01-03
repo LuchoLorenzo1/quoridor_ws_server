@@ -67,6 +67,8 @@ export default function gameReadyHandler(
   };
 
   const ready = async () => {
+    if (socket.data.player == null) return;
+
     const ready = await redis.get(`game:playersReady:${socket.data.gameId}`);
     let turn = await redis.get(`game:turn:${socket.data.gameId}`);
     if (turn == null) return null;

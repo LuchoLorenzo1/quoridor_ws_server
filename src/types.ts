@@ -47,7 +47,7 @@ export interface SocketData {
   };
   gameId: string;
   players: string[];
-  player: number;
+  player: number | null;
 }
 
 export type TSocket = Socket<
@@ -67,7 +67,7 @@ export type TIo = Server<
 interface GameData {
   history: string[];
   turn: number;
-  player: number;
+  player: number | null;
   players: string[];
   whiteTimeLeft: number;
   blackTimeLeft: number;

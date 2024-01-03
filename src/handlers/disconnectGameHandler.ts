@@ -7,13 +7,12 @@ import { TIo } from "../types";
 const disconnectGameHandler = (io: TIo, socket: Socket) => {
   socket.on("disconnect", async () => {
     const gameState = await redis.get(`game:state:${socket.data.gameId}`);
-    console.log("socket.on(disconnect): gameState", gameState);
 
     if (gameState != "playing") {
       await redis.del(`matchmaking:rematch:${socket.data.gameId}`);
       io.of(socket.nsp.name).emit("rematch", "");
-	  if (socket.data.player)
-		  io.of(socket.nsp.name).emit("leftChat", socket.data.player);
+      if (socket.data.player)
+        io.of(socket.nsp.name).emit("leftChat", socket.data.player);
       return;
     }
 

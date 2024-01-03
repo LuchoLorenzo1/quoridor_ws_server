@@ -35,7 +35,6 @@ export default async function rematchHandler(io: TIo, socket: TSocket) {
     const gameId = uuidv4();
     createGame(gameId, socket.data.user.id, playerId, +time);
 
-    // TODO: only to players
     io.of(socket.nsp.name).emit("rematchGame", gameId);
   };
 
