@@ -33,7 +33,19 @@ export default async function rematchHandler(io: TIo, socket: TSocket) {
     await redis.del(`matchmaking:rematch:${socket.data.gameId}`);
 
     const gameId = uuidv4();
-    createGame(gameId, socket.data.user.id, playerId, +time);
+    console.log(
+      "eL que acepta el rematch esta jugando como:",
+      socket.data.player,
+      socket.data.player == 1,
+      socket.data.user.id,
+    );
+    createGame(
+      gameId,
+      socket.data.user.id,
+      playerId,
+      +time,
+      socket.data.player == 1,
+    );
 
     io.of(socket.nsp.name).emit("rematchGame", gameId);
   };
