@@ -13,10 +13,15 @@ export interface ServerToClientEvents {
   rematch: (playerId: string) => void;
   rematchGame: (gameId: string) => void;
   chat: (messages: string[]) => void;
-  leftChat: (messages: string[]) => void;
-  stats: (stats: { playing: string; online: string }) => void;
+  leftChat: (messages: number) => void;
+  stats: (stats: { playing: number; online: number }) => void;
   playerConnected: (playerId: string) => void;
   playerDisconnected: (playerId: string) => void;
+  playerData: (playerData: {
+    gameId?: string;
+    opponentId?: string;
+    online: boolean;
+  }) => void;
 }
 
 export interface ClientToServerEvents {
@@ -33,6 +38,7 @@ export interface ClientToServerEvents {
   rematch: () => void;
   rejectRematch: () => void;
   cancelRematch: () => void;
+  playerData: (player: string) => void;
 }
 
 export interface InterServerEvents {

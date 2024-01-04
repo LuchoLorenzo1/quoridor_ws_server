@@ -5,9 +5,9 @@ import { TIo, TSocket } from "../types";
 import { v4 as uuidv4 } from "uuid";
 
 export default async function connectGameHandler(io: TIo, socket: TSocket) {
-  await redis.hIncrBy("stats", "online", 1);
+  await redis.sAdd("players:online", socket.data.user.id);
   socket.on("disconnect", async () => {
-    redis.hIncrBy("stats", "online", -1);
+    await redis.sRem("players:online", socket.data.user.id);
     cancelGameSearch();
   });
 
@@ -94,12 +94,6 @@ export default async function connectGameHandler(io: TIo, socket: TSocket) {
 
   socket.on("home", async () => {
     socket.join("home");
-    const stats = (await redis.hGetAll("stats")) as {
-      playing: string;
-      online: string;
-    };
-    if (stats) socket.emit("stats", stats);
-
     const gameId = await redis.get(`game:playerId:${socket.data.user.id}`);
     if (gameId) socket.emit("reconnectGame", gameId);
   });

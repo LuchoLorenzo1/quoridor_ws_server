@@ -1,10 +1,9 @@
-import { Socket } from "socket.io";
 import redis from "../redisClient";
 import { DISCONNECT_SECONDS } from "../constants";
 import { saveGame } from "../controllers/saveGame";
-import { TIo } from "../types";
+import { TIo, TSocket } from "../types";
 
-const disconnectGameHandler = (io: TIo, socket: Socket) => {
+const disconnectGameHandler = (io: TIo, socket: TSocket) => {
   socket.on("disconnect", async () => {
     const gameState = await redis.get(`game:state:${socket.data.gameId}`);
 

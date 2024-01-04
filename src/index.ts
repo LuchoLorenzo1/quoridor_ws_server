@@ -17,6 +17,8 @@ import chatHandler from "./handlers/chatHandler";
 import statsInterval from "./controllers/statsInterval";
 import rematchHandler from "./handlers/rematchHandler";
 import disconnectGameHandler from "./handlers/disconnectGameHandler";
+import redis from "./redisClient";
+import playerDataHandler from "./handlers/playerDataHandler";
 
 dotenv.config();
 const PORT = process.env.PORT || 8000;
@@ -44,6 +46,7 @@ io.on("connection", async (socket) => {
     socket.conn.remoteAddress,
   );
   connectGameHandler(io, socket);
+  playerDataHandler(socket);
 });
 
 statsInterval(io);
