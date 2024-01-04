@@ -5,6 +5,11 @@ import { TIo, TSocket } from "../types";
 
 const disconnectGameHandler = (io: TIo, socket: TSocket) => {
   socket.on("disconnect", async () => {
+    if (socket.data.player == null) {
+      await redis.decrBy(`game:viewers:${socket.data.gameId}`, 1);
+      socket.broadcast.emit("playerDisconnected", socket.data.user.id);
+      return;
+    }
     const gameState = await redis.get(`game:state:${socket.data.gameId}`);
 
     if (gameState != "playing") {

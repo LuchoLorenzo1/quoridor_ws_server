@@ -70,13 +70,14 @@ export type TIo = Server<
   SocketData
 >;
 
-interface GameData {
+export interface GameData {
   history: string[];
   turn: number;
   player: number | null;
   players: string[];
   whiteTimeLeft: number;
   blackTimeLeft: number;
+  viewers: number;
 }
 
 export interface PawnPos {

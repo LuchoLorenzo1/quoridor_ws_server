@@ -17,6 +17,7 @@ export const deleteGame = async (gameId: string, players: string[]) => {
     .del(`game:game_started_date:${gameId}`)
     .del(`game:walls_left:${gameId}`)
     .del(`game:chat:${gameId}`)
+	.del(`game:viewers:${gameId}`)
     .hIncrBy("stats", "playing", -2)
     .exec();
 };

@@ -12,6 +12,7 @@ const gameMiddleware = async (socket: TSocket, next: any) => {
   if (player < 0) {
     player = null;
     socket.join("viewer");
+    await redis.incrBy(`game:viewers:${socket.data.gameId}`, 1);
   } else {
     socket.join("player");
   }

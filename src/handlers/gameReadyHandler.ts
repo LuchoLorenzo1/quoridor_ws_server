@@ -17,6 +17,7 @@ export default function gameReadyHandler(
       whiteLastMove,
       blackLastMove,
       gameStartedDate,
+      viewers,
     ] = (await redis
       .multi()
       .lRange(`game:history:${socket.data.gameId}`, 0, -1)
@@ -26,6 +27,7 @@ export default function gameReadyHandler(
       .get(`game:white_last_move:${socket.data.gameId}`)
       .get(`game:black_last_move:${socket.data.gameId}`)
       .get(`game:game_started_date:${socket.data.gameId}`)
+      .get(`game:viewers:${socket.data.gameId}`)
       .exec()) as [
       string[],
       string,
@@ -35,6 +37,7 @@ export default function gameReadyHandler(
       string,
       string,
       { white: string; black: string },
+      string,
     ];
 
     let now = Date.now();
@@ -63,6 +66,7 @@ export default function gameReadyHandler(
       whiteTimeLeft: +whiteTimeLeft,
       blackTimeLeft: +blackTimeLeft,
       players: socket.data.players,
+      viewers: +viewers,
     });
   };
 
