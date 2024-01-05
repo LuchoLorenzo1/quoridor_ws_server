@@ -14,6 +14,7 @@
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
+    "glicko2-lite": "^4.0.0",
     "postgres": "^3.4.3",
     "redis": "^4.6.12",
     "socket.io": "^4.7.2",

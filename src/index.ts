@@ -17,7 +17,6 @@ import chatHandler from "./handlers/chatHandler";
 import statsInterval from "./controllers/statsInterval";
 import rematchHandler from "./handlers/rematchHandler";
 import disconnectGameHandler from "./handlers/disconnectGameHandler";
-import redis from "./redisClient";
 import playerDataHandler from "./handlers/playerDataHandler";
 
 dotenv.config();

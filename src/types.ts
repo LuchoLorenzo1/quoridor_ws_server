@@ -78,6 +78,8 @@ export interface GameData {
   whiteTimeLeft: number;
   blackTimeLeft: number;
   viewers: number;
+  whiteRating: { rating: number; rd: number };
+  blackRating: { rating: number; rd: number };
 }
 
 export interface PawnPos {

@@ -1,4 +1,5 @@
 import createGame from "../controllers/createGame";
+import { getRatingByUserId } from "../controllers/ratings";
 import { saveGame } from "../controllers/saveGame";
 import redis from "../redisClient";
 import { TIo, TSocket } from "../types";
@@ -85,11 +86,29 @@ export default async function connectGameHandler(io: TIo, socket: TSocket) {
     await redis.del(`playerSearchingId:${time}`);
     await redis.del(`searchingGame:playerId:${playerSearchingId}`);
 
+    const ratingUser = await getRatingByUserId(socket.data.user.id);
+    const ratingPlayerSearching = await getRatingByUserId(playerSearchingId);
+    if (!ratingUser || !ratingPlayerSearching) return;
+
+    const player1 = {
+      id: socket.data.user.id,
+      rating: ratingUser.rating,
+      rd: ratingUser.rating_deviation,
+      vol: ratingUser.volatility,
+    };
+
+    const player2 = {
+      id: playerSearchingId,
+      rating: ratingPlayerSearching.rating,
+      rd: ratingPlayerSearching.rating_deviation,
+      vol: ratingPlayerSearching.volatility,
+    };
+
     socket.join(`game-${gameId}`);
     io.to(`game-${gameId}`).emit("foundGame", gameId);
     io.in(`game-${gameId}`).socketsLeave(["home", `game-${gameId}`]);
 
-    await createGame(gameId, playerSearchingId, socket.data.user.id, time);
+    await createGame(gameId, player1, player2, time);
   };
 
   socket.on("home", async () => {
