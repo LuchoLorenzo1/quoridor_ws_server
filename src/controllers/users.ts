@@ -1,15 +1,18 @@
 import sql from "../postgresClient";
 
-interface Rating {
+interface UserData {
+  id: string;
+  name: string;
+  image?: string;
   rating: number;
   rating_deviation: number;
   volatility: number;
 }
 
-export const getRatingByUserId = async (userId: string) => {
+export const getUserById = async (userId: string) => {
   const res = await sql<
-    Rating[]
-  >`SELECT rating, rating_deviation, volatility FROM users WHERE id = ${userId}`;
+    UserData[]
+  >`SELECT id, name, image, rating, rating_deviation, volatility FROM users WHERE id = ${userId}`;
   if (res.length === 0) return null;
   return res[0];
 };

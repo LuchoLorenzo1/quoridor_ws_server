@@ -2,7 +2,7 @@ import sql from "../postgresClient";
 import redis from "../redisClient";
 import { calculateNewRatings } from "../utils/ratings";
 import { deleteGame } from "./deleteGame";
-import { updateRatingByUserId } from "./ratings";
+import { updateRatingByUserId } from "./users";
 
 type winningReason = "play" | "resignation" | "time";
 

@@ -39,6 +39,16 @@ export interface ClientToServerEvents {
   rejectRematch: () => void;
   cancelRematch: () => void;
   playerData: (player: string) => void;
+  createChallenge: (
+    game: { seconds: number; color: string; rated: string },
+    callback: (invitationCode: string) => void,
+  ) => void;
+  acceptChallenge: (invitationCode: string) => void;
+  getChallenge: (
+    invitationCode: string,
+    callback: (challenge: Challenge) => void,
+  ) => void;
+  cancelChallenge: (invitationCode: string, callback: () => void) => void;
 }
 
 export interface InterServerEvents {
@@ -90,4 +100,17 @@ export interface PawnPos {
 export interface Wall {
   row: number;
   col: number;
+}
+
+export interface Challenge {
+  seconds: string;
+  color: "random" | "white" | "black";
+  rated: "rated" | "casual";
+  challengerId: string;
+  challengerName: string;
+  challengerImage: string;
+  challengerRating: string;
+  challengerRd: string;
+  challengerVol: string;
+  gameId: string;
 }

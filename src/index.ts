@@ -18,6 +18,7 @@ import statsInterval from "./controllers/statsInterval";
 import rematchHandler from "./handlers/rematchHandler";
 import disconnectGameHandler from "./handlers/disconnectGameHandler";
 import playerDataHandler from "./handlers/playerDataHandler";
+import challengeGameHandler from "./handlers/createChallengeHandler";
 
 dotenv.config();
 const PORT = process.env.PORT || 8000;
@@ -44,6 +45,7 @@ io.on("connection", async (socket) => {
     socket.data.user.name,
     socket.conn.remoteAddress,
   );
+  challengeGameHandler(io, socket);
   connectGameHandler(io, socket);
   playerDataHandler(socket);
 });

@@ -1,5 +1,5 @@
 import createGame from "../controllers/createGame";
-import { getRatingByUserId } from "../controllers/ratings";
+import { getUserById } from "../controllers/users";
 import redis from "../redisClient";
 import { TIo, TSocket } from "../types";
 import { v4 as uuidv4 } from "uuid";
@@ -30,8 +30,8 @@ export default async function rematchHandler(io: TIo, socket: TSocket) {
 
     await redis.del(`matchmaking:rematch:${socket.data.gameId}`);
 
-    const ratingUser = await getRatingByUserId(socket.data.user.id);
-    const ratingPlayerSearching = await getRatingByUserId(playerId);
+    const ratingUser = await getUserById(socket.data.user.id);
+    const ratingPlayerSearching = await getUserById(playerId);
     if (!ratingUser || !ratingPlayerSearching) return;
     const player1 = {
       id: socket.data.user.id,

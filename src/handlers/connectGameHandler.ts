@@ -1,5 +1,5 @@
 import createGame from "../controllers/createGame";
-import { getRatingByUserId } from "../controllers/ratings";
+import { getUserById } from "../controllers/users";
 import { saveGame } from "../controllers/saveGame";
 import redis from "../redisClient";
 import { TIo, TSocket } from "../types";
@@ -86,8 +86,8 @@ export default async function connectGameHandler(io: TIo, socket: TSocket) {
     await redis.del(`playerSearchingId:${time}`);
     await redis.del(`searchingGame:playerId:${playerSearchingId}`);
 
-    const ratingUser = await getRatingByUserId(socket.data.user.id);
-    const ratingPlayerSearching = await getRatingByUserId(playerSearchingId);
+    const ratingUser = await getUserById(socket.data.user.id);
+    const ratingPlayerSearching = await getUserById(playerSearchingId);
     if (!ratingUser || !ratingPlayerSearching) return;
 
     const player1 = {
